@@ -2187,7 +2187,7 @@ document.addEventListener('DOMContentLoaded',function(){
   (function restoreSession(){
     try{
       var saved=sessionStorage.getItem('cmi_u');
-      if(!saved)return;
+      if(!saved){initGoogleSignIn();return;}
       var sess=JSON.parse(saved);
       if(!sess.role)return; // invalid session
       U={username:sess.username,email:sess.email||'',
