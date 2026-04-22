@@ -1815,7 +1815,11 @@ function refreshMsgThread(){
   var thread=el('msg-thread');
   if(!msgs.length){thread.innerHTML='<div style="font-size:12px;color:var(--hi);text-align:center;padding:20px">No messages yet.</div>';return;}
   thread.innerHTML=msgs.map(function(m){
-    var isMe=U&&m.from===U.username;
+    var isMe = U && (
+  m.from === U.username || m.from === U.email ||
+  (U.role === 'dept' && m.fromRole === 'dept') ||        // dept user thấy tin mình gửi bên phải
+  ((U.role === 'bod') && m.fromRole === 'bod')            // BOD thấy tin mình gửi bên phải
+);
     return '<div style="display:flex;flex-direction:column;align-items:'+(isMe?'flex-end':'flex-start')+'">'
       +'<div class="msg-bubble '+(isMe?'msg-from-me':'msg-from-other')+'">'
       +esc(m.text)
