@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V27</title>
+<title>CMI · KPI Dashboard V28</title>
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -730,8 +730,8 @@ function decodeGoogleJWT(token){
 }
 
 // ── Called by Google Sign-In button ──
-function handleGoogleSignIn(response){
-  var payload=decodeGoogleJWT(response.credential);
+// ── Shared payload handler — dùng cho cả GIS button lẫn OAuth2 token flow ──
+function handleGooglePayload(payload){
   if(!payload||!payload.email){
     showLoginErr('Invalid Google token. Please try again.');
     return;
@@ -751,6 +751,12 @@ function handleGoogleSignIn(response){
        name:entry.name, color:entry.color, ini:''};
     startApp();
   });
+}
+
+// ── GIS One-Tap callback (first-time login, no signout flag) ──
+function handleGoogleSignIn(response){
+  var payload=decodeGoogleJWT(response.credential);
+  handleGooglePayload(payload);
 }
 
 function showLoginErr(msg){
@@ -929,26 +935,27 @@ function getLastDataMonth(deptId){
 // (it needs getPass() to check localStorage passwords)
 
 function doLogout(){
-  // 1. Xóa session khỏi localStorage (true sign-out)
+  // 1. Đánh dấu đã sign out → lần sau phải chọn account lại
+  try{localStorage.setItem('cmi_so','1');}catch(e){}
+  // 2. Xóa session khỏi localStorage
   try{localStorage.removeItem('cmi_u');}catch(e){}
-  // 2. Disable Google auto-select + revoke token
-  //    disableAutoSelect() là key: ngăn GIS tự re-login không cần click
+  // 3. Disable Google auto-select + revoke token
   try{
     if(typeof google!=='undefined'&&google.accounts){
       google.accounts.id.disableAutoSelect();
       if(U&&U.email) google.accounts.id.revoke(U.email,function(){});
     }
   }catch(e){}
-  // 3. Dừng tất cả background timers
+  // 4. Dừng tất cả background timers
   if(MSG_BG_TIMER){clearInterval(MSG_BG_TIMER);MSG_BG_TIMER=null;}
   if(MSG_POLL_TIMER){clearInterval(MSG_POLL_TIMER);MSG_POLL_TIMER=null;}
   if(KPI_REFRESH_TIMER){clearInterval(KPI_REFRESH_TIMER);KPI_REFRESH_TIMER=null;}
-  // 4. Reset state
+  // 5. Reset state
   WL_CACHE=null;
   U=null; deptId=null; accOpen=null;
   Object.keys(CH).forEach(function(k){ try{CH[k].destroy();}catch(e){} });
   CH={}; GS_DATA=[]; GS_HDR=[]; UNLOCKED={};
-  // 5. Về trang login, reset Google button để hiện picker
+  // 6. Về trang login, reset Google button
   el('pg-app').style.display='none';
   el('pg-login').style.display='flex';
   el('l-err').style.display='none';
@@ -2027,7 +2034,7 @@ function closeDrill(){
 // ═══════════════════════════════════════════════
 var MSG_SHEET_GID  = '921732954'; // tab: Messages
 // ← Whitelist GID: GAS auto-creates this tab; find GID after first getWhitelist call
-var WL_SHEET_GID   = '1378281087'; // ← fill after GAS creates Whitelist tab
+var WL_SHEET_GID   = ''; // ← fill after GAS creates Whitelist tab
 // ← Get from Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client ID
 var GOOGLE_CLIENT_ID = '562822497723-omjm4amq1ob2gpsfke8149ihgpqj0ujc.apps.googleusercontent.com'; // ← fill in
 function getMsgSheetUrl(){
@@ -2184,24 +2191,78 @@ function buildAdminPanel(){
 // ── Initialize Google Sign-In button ──
 function initGoogleSignIn(){
   if(!GOOGLE_CLIENT_ID||GOOGLE_CLIENT_ID.indexOf('YOUR_CLIENT')>=0){
-    // Client ID not set — show config warning
     el('gsi-btn-wrap').innerHTML='<div style="color:var(--am);font-size:11px;text-align:center;padding:10px">⚠ GOOGLE_CLIENT_ID not configured.<br>See setup guide.</div>';
     return;
   }
-  // Wait for GIS library to load (async script)
   if(typeof google==='undefined'||!google.accounts){
     setTimeout(initGoogleSignIn, 200);
     return;
   }
-  google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
-    callback:  handleGoogleSignIn,
-    auto_select: false
-  });
-  google.accounts.id.renderButton(el('gsi-btn-wrap'),{
-    theme:'outline', size:'large', width:260,
-    text:'signin_with', shape:'rectangular'
-  });
+
+  var signedOut = localStorage.getItem('cmi_so') === '1';
+
+  if(signedOut && google.accounts.oauth2){
+    // ── POST-LOGOUT MODE: OAuth2 token flow với prompt:'select_account' ──
+    // Bắt buộc hiện Google account picker, user phải chủ động chọn account
+    var tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: 'email profile',
+      prompt: 'select_account',
+      callback: function(resp){
+        if(resp.error){
+          showLoginErr('Sign-in cancelled or failed. Please try again.');
+          return;
+        }
+        el('l-loading').style.display='block';
+        el('l-err').style.display='none';
+        fetch('https://www.googleapis.com/oauth2/v3/userinfo',{
+          headers:{Authorization:'Bearer '+resp.access_token}
+        })
+        .then(function(r){return r.json();})
+        .then(function(payload){
+          localStorage.removeItem('cmi_so'); // xóa flag sau khi login thành công
+          handleGooglePayload(payload);
+        })
+        .catch(function(){
+          showLoginErr('Could not retrieve user info. Please try again.');
+          el('l-loading').style.display='none';
+        });
+      }
+    });
+    // Render button kiểu Google (style match với GIS button)
+    el('gsi-btn-wrap').innerHTML=
+      '<button id="gsi-post-btn" style="'
+      +'display:inline-flex;align-items:center;justify-content:center;gap:10px;'
+      +'padding:10px 16px;border:1px solid #dadce0;border-radius:4px;'
+      +'background:#fff;color:#3c4043;font-size:14px;font-weight:500;'
+      +'cursor:pointer;font-family:inherit;width:260px;'
+      +'box-shadow:0 1px 3px rgba(0,0,0,.12);transition:box-shadow .2s"'
+      +' onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.2)'"'
+      +' onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,.12)'">'
+      +'<svg width="18" height="18" viewBox="0 0 48 48">'
+      +'<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>'
+      +'<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>'
+      +'<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>'
+      +'<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>'
+      +'</svg>'
+      +'Sign in with Google'
+      +'</button>';
+    document.getElementById('gsi-post-btn').addEventListener('click',function(){
+      tokenClient.requestAccessToken();
+    });
+
+  } else {
+    // ── NORMAL MODE: GIS One-Tap button (first visit / no signout flag) ──
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback:  handleGoogleSignIn,
+      auto_select: false
+    });
+    google.accounts.id.renderButton(el('gsi-btn-wrap'),{
+      theme:'outline', size:'large', width:260,
+      text:'signin_with', shape:'rectangular'
+    });
+  }
 }
 
 document.addEventListener('DOMContentLoaded',function(){
@@ -2209,9 +2270,9 @@ document.addEventListener('DOMContentLoaded',function(){
   (function restoreSession(){
     try{
       var saved=localStorage.getItem('cmi_u');
-      if(!saved){ initGoogleSignIn(); return; }
+      if(!saved){initGoogleSignIn();return;}
       var sess=JSON.parse(saved);
-      if(!sess.role){ initGoogleSignIn(); return; } // invalid session
+      if(!sess.role){initGoogleSignIn();return;} // invalid session
       U={username:sess.username,email:sess.email||'',
          role:sess.role,dept:sess.dept||null,
          name:sess.name,color:sess.color,ini:sess.ini||''};
