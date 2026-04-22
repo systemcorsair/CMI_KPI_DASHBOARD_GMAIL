@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V28</title>
+<title>CMI · KPI Dashboard V29</title>
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -2210,7 +2210,7 @@ function initGoogleSignIn(){
     var tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: 'email profile',
-      prompt: 'select_account',
+      prompt: 'login',
       callback: function(resp){
         if(resp.error){
           showLoginErr('Sign-in cancelled or failed. Please try again.');
