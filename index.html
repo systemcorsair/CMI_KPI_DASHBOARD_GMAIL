@@ -771,9 +771,9 @@ function showLoginErr(msg){
 function startApp(){
   el('pg-login').style.display='none';
   el('pg-app').style.display='flex';
-  // History button: hide for dept only; BOD + admin still see it
+  // History button: hidden for ALL roles
   var hBtn=el('rp-hist-btn');
-  if(hBtn) hBtn.style.display=(U&&U.role==='dept')?'none':'';
+  if(hBtn) hBtn.style.display='none';
   setSyncBadge('loading');
   startMsgBackgroundPoll();
   try{localStorage.setItem('cmi_u',JSON.stringify({
@@ -943,11 +943,19 @@ function doLogout(){
   try{localStorage.setItem('cmi_so','1');}catch(e){}
   // 2. Xóa session khỏi localStorage
   try{localStorage.removeItem('cmi_u');}catch(e){}
-  // 3. Disable Google auto-select + revoke token
+  // 3. Revoke Google token + disable auto-select + clear all Google cookies
   try{
     if(typeof google!=='undefined'&&google.accounts){
       google.accounts.id.disableAutoSelect();
-      if(U&&U.email) google.accounts.id.revoke(U.email,function(){});
+      // Revoke by email (GIS)
+      if(U&&U.email){
+        google.accounts.id.revoke(U.email,function(){});
+      }
+      // Revoke OAuth2 token nếu có
+      if(window._googleAccessToken){
+        google.accounts.oauth2.revoke(window._googleAccessToken,function(){});
+        window._googleAccessToken=null;
+      }
     }
   }catch(e){}
   // 4. Dừng tất cả background timers
@@ -959,7 +967,7 @@ function doLogout(){
   U=null; deptId=null; accOpen=null;
   Object.keys(CH).forEach(function(k){ try{CH[k].destroy();}catch(e){} });
   CH={}; GS_DATA=[]; GS_HDR=[]; UNLOCKED={};
-  // 6. Về trang login, reset Google button
+  // 6. Về trang login, render lại button với prompt bắt buộc chọn account
   el('pg-app').style.display='none';
   el('pg-login').style.display='flex';
   el('l-err').style.display='none';
@@ -2207,17 +2215,19 @@ function initGoogleSignIn(){
   var signedOut = localStorage.getItem('cmi_so') === '1';
 
   if(signedOut && google.accounts.oauth2){
-    // ── POST-LOGOUT: token client popup với prompt:'login' ──
-    // Popup không cần đăng ký redirect URI, Chrome vẫn phải hỏi password
+    // ── POST-LOGOUT: token client popup với prompt:'select_account consent' ──
+    // Buộc Google hiển thị màn hình chọn tài khoản + nhập password
     var tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: 'email profile',
-      prompt: 'login',
+      prompt: 'select_account consent',
       callback: function(resp){
         if(resp.error){
           showLoginErr('Sign-in cancelled or failed. Please try again.');
           return;
         }
+        // Lưu token để revoke khi logout
+        window._googleAccessToken = resp.access_token;
         el('l-loading').style.display='block';
         el('l-err').style.display='none';
         fetch('https://www.googleapis.com/oauth2/v3/userinfo',{
@@ -2274,6 +2284,8 @@ document.addEventListener('DOMContentLoaded',function(){
   // ── 1. Restore session (survives F5) ──
   (function restoreSession(){
     try{
+      // Nếu user đã sign out → KHÔNG restore, bắt buộc login lại
+      if(localStorage.getItem('cmi_so')==='1'){initGoogleSignIn();return;}
       var saved=localStorage.getItem('cmi_u');
       if(!saved){initGoogleSignIn();return;}
       var sess=JSON.parse(saved);
@@ -2288,7 +2300,7 @@ document.addEventListener('DOMContentLoaded',function(){
       el('pg-login').style.display='none';
       el('pg-app').style.display='flex';
       var hBtn2=el('rp-hist-btn');
-      if(hBtn2) hBtn2.style.display=(sess.role==='dept')?'none':'';
+      if(hBtn2) hBtn2.style.display='none';
       setSyncBadge('loading');
       startMsgBackgroundPoll();
       fetchSheetData(function(){
