@@ -2209,9 +2209,9 @@ document.addEventListener('DOMContentLoaded',function(){
   (function restoreSession(){
     try{
       var saved=localStorage.getItem('cmi_u');
-      if(!saved)return;
+      if(!saved){ initGoogleSignIn(); return; }
       var sess=JSON.parse(saved);
-      if(!sess.role)return; // invalid session
+      if(!sess.role){ initGoogleSignIn(); return; } // invalid session
       U={username:sess.username,email:sess.email||'',
          role:sess.role,dept:sess.dept||null,
          name:sess.name,color:sess.color,ini:sess.ini||''};
