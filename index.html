@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard</title>
+<title>CMI · KPI Dashboard V27</title>
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -762,12 +762,12 @@ function showLoginErr(msg){
 function startApp(){
   el('pg-login').style.display='none';
   el('pg-app').style.display='flex';
-  // Hide History button for dept users
+  // Hide History button for dept + bod users (admin only sees it)
   var hBtn=el('rp-hist-btn');
-  if(hBtn) hBtn.style.display=(U&&U.role==='dept')?'none':'';
+  if(hBtn) hBtn.style.display=(U&&(U.role==='dept'||U.role==='bod'))?'none':'';
   setSyncBadge('loading');
   startMsgBackgroundPoll();
-  try{sessionStorage.setItem('cmi_u',JSON.stringify({
+  try{localStorage.setItem('cmi_u',JSON.stringify({
     username:U.username,email:U.email||'',
     role:U.role,dept:U.dept||null,
     name:U.name,color:U.color,ini:U.ini||'',
@@ -929,20 +929,31 @@ function getLastDataMonth(deptId){
 // (it needs getPass() to check localStorage passwords)
 
 function doLogout(){
-  try{sessionStorage.removeItem('cmi_u');}catch(e){}
-  // Revoke Google session so next visit shows picker again
+  // 1. Xóa session khỏi localStorage (true sign-out)
+  try{localStorage.removeItem('cmi_u');}catch(e){}
+  // 2. Disable Google auto-select + revoke token
+  //    disableAutoSelect() là key: ngăn GIS tự re-login không cần click
   try{
-    if(typeof google!=='undefined'&&google.accounts&&U&&U.email)
-      google.accounts.id.revoke(U.email,function(){});
+    if(typeof google!=='undefined'&&google.accounts){
+      google.accounts.id.disableAutoSelect();
+      if(U&&U.email) google.accounts.id.revoke(U.email,function(){});
+    }
   }catch(e){}
-  WL_CACHE=null; // clear whitelist cache
-  // Read-store is per-user key, no need to clear on logout
+  // 3. Dừng tất cả background timers
+  if(MSG_BG_TIMER){clearInterval(MSG_BG_TIMER);MSG_BG_TIMER=null;}
+  if(MSG_POLL_TIMER){clearInterval(MSG_POLL_TIMER);MSG_POLL_TIMER=null;}
+  if(KPI_REFRESH_TIMER){clearInterval(KPI_REFRESH_TIMER);KPI_REFRESH_TIMER=null;}
+  // 4. Reset state
+  WL_CACHE=null;
   U=null; deptId=null; accOpen=null;
   Object.keys(CH).forEach(function(k){ try{CH[k].destroy();}catch(e){} });
-  CH={}; GS_DATA=[]; GS_HDR=[];
+  CH={}; GS_DATA=[]; GS_HDR=[]; UNLOCKED={};
+  // 5. Về trang login, reset Google button để hiện picker
   el('pg-app').style.display='none';
   el('pg-login').style.display='flex';
-  el('l-u').value=''; el('l-p').value='';
+  el('l-err').style.display='none';
+  el('gsi-btn-wrap').innerHTML=''; // xóa button cũ
+  setTimeout(initGoogleSignIn,150);  // render lại → bắt buộc chọn account
 }
 
 // ═══════════════════════════════════════════════
@@ -2197,7 +2208,7 @@ document.addEventListener('DOMContentLoaded',function(){
   // ── 1. Restore session (survives F5) ──
   (function restoreSession(){
     try{
-      var saved=sessionStorage.getItem('cmi_u');
+      var saved=localStorage.getItem('cmi_u');
       if(!saved)return;
       var sess=JSON.parse(saved);
       if(!sess.role)return; // invalid session
@@ -2211,7 +2222,7 @@ document.addEventListener('DOMContentLoaded',function(){
       el('pg-login').style.display='none';
       el('pg-app').style.display='flex';
       var hBtn2=el('rp-hist-btn');
-      if(hBtn2) hBtn2.style.display=(sess.role==='dept')?'none':'';
+      if(hBtn2) hBtn2.style.display=(sess.role==='dept'||sess.role==='bod')?'none':'';
       setSyncBadge('loading');
       startMsgBackgroundPoll();
       fetchSheetData(function(){
