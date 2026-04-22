@@ -771,9 +771,9 @@ function showLoginErr(msg){
 function startApp(){
   el('pg-login').style.display='none';
   el('pg-app').style.display='flex';
-  // Hide History button for dept + bod users (admin only sees it)
+  // History button: hide for dept only; BOD + admin still see it
   var hBtn=el('rp-hist-btn');
-  if(hBtn) hBtn.style.display=(U&&(U.role==='dept'||U.role==='bod'))?'none':'';
+  if(hBtn) hBtn.style.display=(U&&U.role==='dept')?'none':'';
   setSyncBadge('loading');
   startMsgBackgroundPoll();
   try{localStorage.setItem('cmi_u',JSON.stringify({
@@ -2204,35 +2204,16 @@ function initGoogleSignIn(){
 
   var signedOut = localStorage.getItem('cmi_so') === '1';
 
-  if(signedOut && google.accounts.oauth2){
-    // ── POST-LOGOUT MODE: OAuth2 token flow với prompt:'select_account' ──
-    // Bắt buộc hiện Google account picker, user phải chủ động chọn account
-    var tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
-      scope: 'email profile',
-      prompt: 'login',
-      callback: function(resp){
-        if(resp.error){
-          showLoginErr('Sign-in cancelled or failed. Please try again.');
-          return;
-        }
-        el('l-loading').style.display='block';
-        el('l-err').style.display='none';
-        fetch('https://www.googleapis.com/oauth2/v3/userinfo',{
-          headers:{Authorization:'Bearer '+resp.access_token}
-        })
-        .then(function(r){return r.json();})
-        .then(function(payload){
-          localStorage.removeItem('cmi_so'); // xóa flag sau khi login thành công
-          handleGooglePayload(payload);
-        })
-        .catch(function(){
-          showLoginErr('Could not retrieve user info. Please try again.');
-          el('l-loading').style.display='none';
-        });
-      }
-    });
-    // Render button kiểu Google (style match với GIS button)
+  if(signedOut){
+    // ── POST-LOGOUT MODE: redirect flow với prompt=login ──
+    // Dùng redirect (không phải popup) để Chrome không thể bypass password
+    var redirectUri = window.location.origin + window.location.pathname;
+    var authUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
+      + '?client_id='     + encodeURIComponent(GOOGLE_CLIENT_ID)
+      + '&redirect_uri='  + encodeURIComponent(redirectUri)
+      + '&response_type=token'
+      + '&scope='         + encodeURIComponent('email profile')
+      + '&prompt=login';  // bắt buộc nhập password
     el('gsi-btn-wrap').innerHTML=
       '<button id="gsi-post-btn" style="'
       +'display:inline-flex;align-items:center;justify-content:center;gap:10px;'
@@ -2249,11 +2230,10 @@ function initGoogleSignIn(){
       +'Sign in with Google'
       +'</button>';
     document.getElementById('gsi-post-btn').addEventListener('click',function(){
-      tokenClient.requestAccessToken();
+      window.location.href = authUrl;
     });
-
   } else {
-    // ── NORMAL MODE: GIS One-Tap button (first visit / no signout flag) ──
+    // ── NORMAL MODE: GIS button (first visit / tab restore) ──
     google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID,
       callback:  handleGoogleSignIn,
@@ -2267,6 +2247,43 @@ function initGoogleSignIn(){
 }
 
 document.addEventListener('DOMContentLoaded',function(){
+
+  // ── 0. Handle OAuth2 redirect response (post-logout re-login) ──
+  // Google redirect về app với #access_token=... trong URL hash
+  (function handleOAuthRedirect(){
+    var hash = window.location.hash;
+    if(!hash || hash.indexOf('access_token') < 0) return;
+    // Parse hash params
+    var params = {};
+    hash.substring(1).split('&').forEach(function(part){
+      var kv = part.split('=');
+      if(kv.length === 2) params[kv[0]] = decodeURIComponent(kv[1]);
+    });
+    if(!params.access_token) return;
+    // Clean URL (xóa hash để F5 không re-trigger)
+    history.replaceState(null, '', window.location.pathname);
+    localStorage.removeItem('cmi_so');
+    el('pg-login').style.display='flex';
+    el('pg-app').style.display='none';
+    el('l-loading').style.display='block';
+    el('l-err').style.display='none';
+    // Fetch user info với access token
+    fetch('https://www.googleapis.com/oauth2/v3/userinfo',{
+      headers:{Authorization:'Bearer ' + params.access_token}
+    })
+    .then(function(r){return r.json();})
+    .then(function(payload){
+      el('l-loading').style.display='none';
+      handleGooglePayload(payload);
+    })
+    .catch(function(){
+      el('l-loading').style.display='none';
+      showLoginErr('Could not verify account. Please try again.');
+      initGoogleSignIn();
+    });
+    return; // skip restoreSession below — handled here
+  })();
+
   // ── 1. Restore session (survives F5) ──
   (function restoreSession(){
     try{
@@ -2284,7 +2301,7 @@ document.addEventListener('DOMContentLoaded',function(){
       el('pg-login').style.display='none';
       el('pg-app').style.display='flex';
       var hBtn2=el('rp-hist-btn');
-      if(hBtn2) hBtn2.style.display=(sess.role==='dept'||sess.role==='bod')?'none':'';
+      if(hBtn2) hBtn2.style.display=(sess.role==='dept')?'none':'';
       setSyncBadge('loading');
       startMsgBackgroundPoll();
       fetchSheetData(function(){
