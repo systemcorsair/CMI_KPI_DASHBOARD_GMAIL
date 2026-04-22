@@ -762,6 +762,9 @@ function showLoginErr(msg){
 function startApp(){
   el('pg-login').style.display='none';
   el('pg-app').style.display='flex';
+  // Hide History button for dept users
+  var hBtn=el('rp-hist-btn');
+  if(hBtn) hBtn.style.display=(U&&U.role==='dept')?'none':'';
   setSyncBadge('loading');
   startMsgBackgroundPoll();
   try{sessionStorage.setItem('cmi_u',JSON.stringify({
@@ -1815,11 +1818,15 @@ function refreshMsgThread(){
   var thread=el('msg-thread');
   if(!msgs.length){thread.innerHTML='<div style="font-size:12px;color:var(--hi);text-align:center;padding:20px">No messages yet.</div>';return;}
   thread.innerHTML=msgs.map(function(m){
-    var isMe = U && (
-  m.from === U.username || m.from === U.email ||
-  (U.role === 'dept' && m.fromRole === 'dept') ||        // dept user thấy tin mình gửi bên phải
-  ((U.role === 'bod') && m.fromRole === 'bod')            // BOD thấy tin mình gửi bên phải
-);
+    // isMe: message sent by me
+    // For dept user: their own messages have fromRole==='dept'
+    // For BOD/admin: their own messages have fromRole!=='dept'
+    // Also match by username or email for precision
+    var isMe=U&&(
+      m.from===U.username || m.from===U.email ||
+      (U.role==='dept' && m.fromRole==='dept') ||
+      ((U.role==='bod'||U.role==='admin') && (m.fromRole==='bod'||m.fromRole==='admin'))
+    );
     return '<div style="display:flex;flex-direction:column;align-items:'+(isMe?'flex-end':'flex-start')+'">'
       +'<div class="msg-bubble '+(isMe?'msg-from-me':'msg-from-other')+'">'
       +esc(m.text)
@@ -2009,7 +2016,7 @@ function closeDrill(){
 // ═══════════════════════════════════════════════
 var MSG_SHEET_GID  = '921732954'; // tab: Messages
 // ← Whitelist GID: GAS auto-creates this tab; find GID after first getWhitelist call
-var WL_SHEET_GID   = '1378281087'; // ← fill after GAS creates Whitelist tab
+var WL_SHEET_GID   = ''; // ← fill after GAS creates Whitelist tab
 // ← Get from Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client ID
 var GOOGLE_CLIENT_ID = '562822497723-omjm4amq1ob2gpsfke8149ihgpqj0ujc.apps.googleusercontent.com'; // ← fill in
 function getMsgSheetUrl(){
@@ -2191,7 +2198,7 @@ document.addEventListener('DOMContentLoaded',function(){
   (function restoreSession(){
     try{
       var saved=sessionStorage.getItem('cmi_u');
-      if(!saved){initGoogleSignIn();return;}
+      if(!saved)return;
       var sess=JSON.parse(saved);
       if(!sess.role)return; // invalid session
       U={username:sess.username,email:sess.email||'',
@@ -2203,6 +2210,8 @@ document.addEventListener('DOMContentLoaded',function(){
       if(sess.selBodM!=null)selBodM=sess.selBodM;
       el('pg-login').style.display='none';
       el('pg-app').style.display='flex';
+      var hBtn2=el('rp-hist-btn');
+      if(hBtn2) hBtn2.style.display=(sess.role==='dept')?'none':'';
       setSyncBadge('loading');
       startMsgBackgroundPoll();
       fetchSheetData(function(){
