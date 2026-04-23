@@ -937,20 +937,19 @@ function getLastDataMonth(deptId){
 // (it needs getPass() to check localStorage passwords)
 
 function doLogout(){
-  // 1. Đánh dấu signed-out → initGoogleSignIn dùng prompt=login
-  try{localStorage.setItem('cmi_so','1');}catch(e){}
-  // 2. Xóa session
+  // 1. Xóa session
   try{localStorage.removeItem('cmi_u');}catch(e){}
-  // 3. Dừng timers
+  try{localStorage.removeItem('cmi_so');}catch(e){} // dọn dẹp flag cũ nếu còn sót
+  // 2. Dừng timers
   if(MSG_BG_TIMER){clearInterval(MSG_BG_TIMER);MSG_BG_TIMER=null;}
   if(MSG_POLL_TIMER){clearInterval(MSG_POLL_TIMER);MSG_POLL_TIMER=null;}
   if(KPI_REFRESH_TIMER){clearInterval(KPI_REFRESH_TIMER);KPI_REFRESH_TIMER=null;}
-  // 4. Reset state
+  // 3. Reset state
   WL_CACHE=null;
   U=null; deptId=null; accOpen=null;
   Object.keys(CH).forEach(function(k){ try{CH[k].destroy();}catch(e){} });
   CH={}; GS_DATA=[]; GS_HDR=[]; UNLOCKED={};
-  // 5. Về login + render nút (prompt=login vì cmi_so=1)
+  // 4. Về login + render nút Google
   el('pg-app').style.display='none';
   el('pg-login').style.display='flex';
   el('l-err').style.display='none';
@@ -2186,9 +2185,10 @@ function buildAdminPanel(){
 // ── Initialize Google Sign-In button ──
 // ═══════════════════════════════════════════
 // OAUTH2 REDIRECT FLOW — V29
-// Xóa GIS hoàn toàn. Dùng window.location redirect.
-// Normal:       prompt=select_account
-// Post-logout:  prompt=login (bắt nhập password)
+// Dùng window.location redirect.
+// Luôn dùng prompt=select_account để bắt user chọn lại tài khoản.
+// Lưu ý: Google SSO không hỗ trợ giá trị 'login' cho tham số prompt —
+// nếu truyền vào, Google sẽ bỏ qua và fallback về auto-login.
 // ═══════════════════════════════════════════
 function initGoogleSignIn(){
   if(!GOOGLE_CLIENT_ID||GOOGLE_CLIENT_ID.indexOf('YOUR_CLIENT')>=0){
@@ -2196,8 +2196,9 @@ function initGoogleSignIn(){
       +'text-align:center;padding:10px">⚠ GOOGLE_CLIENT_ID not configured.</div>';
     return;
   }
-  var signedOut = localStorage.getItem('cmi_so')==='1';
-  var prompt    = signedOut ? 'login select_account' : 'select_account';
+  // Luôn dùng 'select_account' — chặn auto-login sau khi sign out.
+  // Không dùng 'login' vì Google coi đó là giá trị không hợp lệ và bỏ qua.
+  var prompt = 'select_account';
   var redirectUri = window.location.origin + window.location.pathname;
   var authUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
     +'?client_id='    +encodeURIComponent(GOOGLE_CLIENT_ID)
