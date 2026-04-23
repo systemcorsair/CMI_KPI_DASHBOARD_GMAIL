@@ -937,10 +937,11 @@ function getLastDataMonth(deptId){
 // (it needs getPass() to check localStorage passwords)
 
 function doLogout(){
-  // 1. Xóa session
+  // 1. Đánh dấu signed-out → initGoogleSignIn sẽ dùng prompt=consent (không thể bypass)
+  try{localStorage.setItem('cmi_so','1');}catch(e){}
+  // 2. Xóa session
   try{localStorage.removeItem('cmi_u');}catch(e){}
-  try{localStorage.removeItem('cmi_so');}catch(e){} // dọn dẹp flag cũ nếu còn sót
-  // 2. Dừng timers
+  // 3. Dừng timers
   if(MSG_BG_TIMER){clearInterval(MSG_BG_TIMER);MSG_BG_TIMER=null;}
   if(MSG_POLL_TIMER){clearInterval(MSG_POLL_TIMER);MSG_POLL_TIMER=null;}
   if(KPI_REFRESH_TIMER){clearInterval(KPI_REFRESH_TIMER);KPI_REFRESH_TIMER=null;}
@@ -2184,11 +2185,11 @@ function buildAdminPanel(){
 // ═══════════════════════════════════════════════
 // ── Initialize Google Sign-In button ──
 // ═══════════════════════════════════════════
-// OAUTH2 REDIRECT FLOW — V29
+// OAUTH2 REDIRECT FLOW — V30
 // Dùng window.location redirect.
-// Luôn dùng prompt=select_account để bắt user chọn lại tài khoản.
-// Lưu ý: Google SSO không hỗ trợ giá trị 'login' cho tham số prompt —
-// nếu truyền vào, Google sẽ bỏ qua và fallback về auto-login.
+// Normal login:  prompt=select_account         (hiện account chooser)
+// Post-logout:   prompt=select_account consent  (hiện chooser + consent screen,
+//                không thể bị Google bypass dù Chrome profile đã đăng nhập sâu)
 // ═══════════════════════════════════════════
 function initGoogleSignIn(){
   if(!GOOGLE_CLIENT_ID||GOOGLE_CLIENT_ID.indexOf('YOUR_CLIENT')>=0){
@@ -2196,9 +2197,11 @@ function initGoogleSignIn(){
       +'text-align:center;padding:10px">⚠ GOOGLE_CLIENT_ID not configured.</div>';
     return;
   }
-  // Luôn dùng 'select_account' — chặn auto-login sau khi sign out.
-  // Không dùng 'login' vì Google coi đó là giá trị không hợp lệ và bỏ qua.
-  var prompt = 'select_account';
+  var signedOut = localStorage.getItem('cmi_so')==='1';
+  // Post-logout: 'select_account consent' buộc Google hiển thị consent screen —
+  // user phải chủ động click "Allow/Continue", không thể auto-bypass.
+  // Normal: 'select_account' đủ để hiện account chooser.
+  var prompt = signedOut ? 'select_account consent' : 'select_account';
   var redirectUri = window.location.origin + window.location.pathname;
   var authUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
     +'?client_id='    +encodeURIComponent(GOOGLE_CLIENT_ID)
@@ -2307,6 +2310,20 @@ document.addEventListener('DOMContentLoaded',function(){
   })();
 
   el('btn-logout').addEventListener('click',doLogout);
+
+  // ── Fix bfcache: khi user nhấn nút Back của browser sau khi Sign Out ──
+  // Browser restore page từ cache ở trạng thái đã login → DOMContentLoaded
+  // không chạy lại → restoreSession không chạy → page vẫn hiện app dù đã logout.
+  // pageshow fires mỗi lần page được hiển thị, kể cả từ bfcache (evt.persisted=true).
+  window.addEventListener('pageshow', function(evt){
+    if(!evt.persisted) return; // load bình thường, không cần xử lý
+    // Page được restore từ bfcache
+    var hasSession = !!localStorage.getItem('cmi_u');
+    if(!hasSession && el('pg-app').style.display !== 'none'){
+      // Cached page đang hiện trạng thái logged-in nhưng session đã bị xóa → reload
+      window.location.reload();
+    }
+  });
 
   // Drill-down modal close & export
   el('drill-cls-btn').addEventListener('click',closeDrill);
