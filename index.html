@@ -937,15 +937,15 @@ function getLastDataMonth(deptId){
 // (it needs getPass() to check localStorage passwords)
 
 function doLogout(){
-  // 1. Đánh dấu signed-out → initGoogleSignIn sẽ dùng prompt=consent (không thể bypass)
-  try{localStorage.setItem('cmi_so','1');}catch(e){}
-  // 2. Xóa session
+  // 1. Xóa session
   try{localStorage.removeItem('cmi_u');}catch(e){}
-  // 3. Dừng timers
+  try{localStorage.removeItem('cmi_so');}catch(e){} // dọn flag cũ nếu còn sót
+  // 2. Dừng timers
   if(MSG_BG_TIMER){clearInterval(MSG_BG_TIMER);MSG_BG_TIMER=null;}
   if(MSG_POLL_TIMER){clearInterval(MSG_POLL_TIMER);MSG_POLL_TIMER=null;}
   if(KPI_REFRESH_TIMER){clearInterval(KPI_REFRESH_TIMER);KPI_REFRESH_TIMER=null;}
   // 3. Reset state
+
   WL_CACHE=null;
   U=null; deptId=null; accOpen=null;
   Object.keys(CH).forEach(function(k){ try{CH[k].destroy();}catch(e){} });
@@ -2185,11 +2185,13 @@ function buildAdminPanel(){
 // ═══════════════════════════════════════════════
 // ── Initialize Google Sign-In button ──
 // ═══════════════════════════════════════════
-// OAUTH2 REDIRECT FLOW — V30
+// OAUTH2 REDIRECT FLOW — V31
 // Dùng window.location redirect.
-// Normal login:  prompt=select_account         (hiện account chooser)
-// Post-logout:   prompt=select_account consent  (hiện chooser + consent screen,
-//                không thể bị Google bypass dù Chrome profile đã đăng nhập sâu)
+// Luôn dùng prompt='consent select_account':
+//   - consent đứng TRƯỚC: Google bắt buộc hiển thị consent screen (không thể bypass)
+//   - select_account: hiện account chooser để user chọn đúng tài khoản
+// Thứ tự này cắt đứt hoàn toàn chuỗi auto-login kể cả khi Chrome profile đã
+// từng "Allow" app này trước đây.
 // ═══════════════════════════════════════════
 function initGoogleSignIn(){
   if(!GOOGLE_CLIENT_ID||GOOGLE_CLIENT_ID.indexOf('YOUR_CLIENT')>=0){
@@ -2197,11 +2199,7 @@ function initGoogleSignIn(){
       +'text-align:center;padding:10px">⚠ GOOGLE_CLIENT_ID not configured.</div>';
     return;
   }
-  var signedOut = localStorage.getItem('cmi_so')==='1';
-  // Post-logout: 'select_account consent' buộc Google hiển thị consent screen —
-  // user phải chủ động click "Allow/Continue", không thể auto-bypass.
-  // Normal: 'select_account' đủ để hiện account chooser.
-  var prompt = signedOut ? 'select_account consent' : 'select_account';
+  var prompt = 'consent select_account';
   var redirectUri = window.location.origin + window.location.pathname;
   var authUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
     +'?client_id='    +encodeURIComponent(GOOGLE_CLIENT_ID)
