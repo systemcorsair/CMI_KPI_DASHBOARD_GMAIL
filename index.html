@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CMI · KPI Dashboard V29</title>
-<!-- GIS removed V29 — using pure OAuth2 redirect flow -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -757,9 +756,8 @@ function handleGooglePayload(payload){
 
 // ── GIS One-Tap callback (first-time login, no signout flag) ──
 function handleGoogleSignIn(response){
-  // V29: GIS removed — này không được gọi nữa, dùng redirect flow
-  var payload=decodeGoogleJWT(response&&response.credential||'');
-  if(payload&&payload.email) handleGooglePayload(payload);
+  var payload=decodeGoogleJWT(response.credential);
+  handleGooglePayload(payload);
 }
 
 function showLoginErr(msg){
@@ -816,6 +814,7 @@ var drF = {y:NY-1, m:0}, drT = {y:NY, m:NM};
 var accOpen = null;
 var CH = {};
 var UNLOCKED = {};
+var OAUTH_HANDLING = false; // true khi đang xử lý OAuth redirect
 // BOD selected period (for snapshot delta view)
 var selBodY = NY;
 var selBodM = NM; // 0-indexed
@@ -938,7 +937,7 @@ function getLastDataMonth(deptId){
 // (it needs getPass() to check localStorage passwords)
 
 function doLogout(){
-  // 1. Set flag → lần sau redirect với prompt=login (bắt nhập password)
+  // 1. Đánh dấu signed-out → initGoogleSignIn dùng prompt=login
   try{localStorage.setItem('cmi_so','1');}catch(e){}
   // 2. Xóa session
   try{localStorage.removeItem('cmi_u');}catch(e){}
@@ -951,12 +950,12 @@ function doLogout(){
   U=null; deptId=null; accOpen=null;
   Object.keys(CH).forEach(function(k){ try{CH[k].destroy();}catch(e){} });
   CH={}; GS_DATA=[]; GS_HDR=[]; UNLOCKED={};
-  // 5. Về trang login + render nút Sign In
+  // 5. Về login + render nút (prompt=login vì cmi_so=1)
   el('pg-app').style.display='none';
   el('pg-login').style.display='flex';
   el('l-err').style.display='none';
   el('gsi-btn-wrap').innerHTML='';
-  initGoogleSignIn(); // render nút với prompt=login vì cmi_so=1
+  initGoogleSignIn();
 }
 
 // ═══════════════════════════════════════════════
@@ -2185,35 +2184,30 @@ function buildAdminPanel(){
 // EVENT DELEGATION — zero inline handlers
 // ═══════════════════════════════════════════════
 // ── Initialize Google Sign-In button ──
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════
 // OAUTH2 REDIRECT FLOW — V29
-// Không dùng GIS One-Tap (bypass được).
-// Dùng window.location.href redirect trực tiếp.
-// NORMAL:    prompt=select_account (chọn account, không hỏi password)
-// POST-LOGOUT: prompt=login+select_account (bắt nhập password)
-// ═══════════════════════════════════════════════
-function buildAuthUrl(promptVal){
-  var redirectUri = 'https://systemcorsair.github.io/CMI_KPI_DASHBOARD_GMAIL/';
-  return 'https://accounts.google.com/o/oauth2/v2/auth'
+// Xóa GIS hoàn toàn. Dùng window.location redirect.
+// Normal:       prompt=select_account
+// Post-logout:  prompt=login (bắt nhập password)
+// ═══════════════════════════════════════════
+function initGoogleSignIn(){
+  if(!GOOGLE_CLIENT_ID||GOOGLE_CLIENT_ID.indexOf('YOUR_CLIENT')>=0){
+    el('gsi-btn-wrap').innerHTML='<div style="color:var(--am);font-size:11px;'
+      +'text-align:center;padding:10px">⚠ GOOGLE_CLIENT_ID not configured.</div>';
+    return;
+  }
+  var signedOut = localStorage.getItem('cmi_so')==='1';
+  var prompt    = signedOut ? 'login select_account' : 'select_account';
+  var redirectUri = window.location.origin + window.location.pathname;
+  var authUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
     +'?client_id='    +encodeURIComponent(GOOGLE_CLIENT_ID)
     +'&redirect_uri=' +encodeURIComponent(redirectUri)
     +'&response_type=token'
     +'&scope='        +encodeURIComponent('openid email profile')
-    +'&prompt='       +encodeURIComponent(promptVal);
-}
+    +'&prompt='       +encodeURIComponent(prompt);
 
-function initGoogleSignIn(){
-  if(!GOOGLE_CLIENT_ID||GOOGLE_CLIENT_ID.indexOf('YOUR_CLIENT')>=0){
-    el('gsi-btn-wrap').innerHTML='<div style="color:var(--am);font-size:11px;text-align:center;padding:10px">⚠ GOOGLE_CLIENT_ID not configured.</div>';
-    return;
-  }
-  var signedOut = localStorage.getItem('cmi_so')==='1';
-  var promptVal = signedOut ? 'login select_account' : 'select_account';
-  var authUrl   = buildAuthUrl(promptVal);
-
-  // Render nút Google-style
   el('gsi-btn-wrap').innerHTML=
-    '<button id="gsi-signin-btn" style="'
+    '<button id="gsi-btn" style="'
     +'display:inline-flex;align-items:center;justify-content:center;gap:10px;'
     +'padding:10px 16px;border:1px solid #dadce0;border-radius:4px;'
     +'background:#fff;color:#3c4043;font-size:14px;font-weight:500;'
@@ -2227,8 +2221,7 @@ function initGoogleSignIn(){
     +'</svg>'
     +'Sign in with Google'
     +'</button>';
-
-  document.getElementById('gsi-signin-btn').addEventListener('click',function(){
+  document.getElementById('gsi-btn').addEventListener('click',function(){
     window.location.href = authUrl;
   });
 }
@@ -2236,47 +2229,55 @@ function initGoogleSignIn(){
 
 document.addEventListener('DOMContentLoaded',function(){
 
-  // ── 0. Handle OAuth2 redirect callback ──
-  // Google redirect về với #access_token=...&token_type=Bearer trong URL hash
+  // ── 0. OAuth2 redirect callback ──
+  // Chạy SYNCHRONOUSLY trước restoreSession.
+  // Phải set OAUTH_HANDLING=true và xóa cmi_so TRƯỚC khi fetch (async).
+  // Nếu không, restoreSession chạy song song sẽ đọc cmi_so=1 và gọi initGoogleSignIn.
   (function handleOAuthCallback(){
     var hash = window.location.hash;
-    if(!hash||hash.indexOf('access_token')<0) return;
-    // Parse hash fragment
+    if(!hash || hash.indexOf('access_token')<0) return;
+    // Parse hash
     var params={};
     hash.replace(/^#/,'').split('&').forEach(function(p){
-      var kv=p.split('=');
-      params[decodeURIComponent(kv[0])]=decodeURIComponent(kv[1]||'');
+      var kv=p.split('='); if(kv[0]) params[decodeURIComponent(kv[0])]=decodeURIComponent(kv[1]||'');
     });
     if(!params.access_token) return;
-    // Xóa hash khỏi URL (F5 sẽ không re-trigger)
-    history.replaceState(null,'',window.location.pathname);
-    // Show loading, ẩn login button
+    // ── SYNCHRONOUS ACTIONS (trước khi bất kỳ async nào chạy) ──
+    OAUTH_HANDLING = true;                      // ngăn restoreSession chạy
+    localStorage.removeItem('cmi_so');          // xóa flag ngay (sync)
+    history.replaceState(null,'',window.location.pathname); // xóa hash khỏi URL
+    // Show loading
     el('pg-login').style.display='flex';
     el('pg-app').style.display='none';
     el('gsi-btn-wrap').innerHTML='';
     el('l-loading').style.display='block';
     el('l-err').style.display='none';
-    // Fetch user info
+    // ── ASYNC: fetch user info ──
     fetch('https://www.googleapis.com/oauth2/v3/userinfo',{
       headers:{Authorization:'Bearer '+params.access_token}
     })
     .then(function(r){return r.json();})
     .then(function(info){
       el('l-loading').style.display='none';
-      if(!info||!info.email){showLoginErr('Could not read account info.');initGoogleSignIn();return;}
-      localStorage.removeItem('cmi_so'); // xóa flag sau login thành công
-      handleGooglePayload(info);
+      if(!info||!info.email){
+        showLoginErr('Could not read account info. Please try again.');
+        OAUTH_HANDLING=false;
+        initGoogleSignIn();
+        return;
+      }
+      handleGooglePayload(info); // login bình thường
     })
     .catch(function(){
       el('l-loading').style.display='none';
-      showLoginErr('Verification failed. Please try again.');
+      showLoginErr('Connection error. Please try again.');
+      OAUTH_HANDLING=false;
       initGoogleSignIn();
     });
-    return true; // signal: OAuth handled, skip restoreSession
   })();
 
   // ── 1. Restore session (survives F5) ──
   (function restoreSession(){
+    if(OAUTH_HANDLING) return; // OAuth đang xử lý — không chạy
     try{
       var saved=localStorage.getItem('cmi_u');
       if(!saved){initGoogleSignIn();return;}
