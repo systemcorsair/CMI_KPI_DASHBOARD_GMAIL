@@ -937,26 +937,23 @@ function getLastDataMonth(deptId){
 // (it needs getPass() to check localStorage passwords)
 
 function doLogout(){
-  // 1. Đánh dấu signed-out → initGoogleSignIn sẽ dùng prompt=login (bắt nhập password)
+  // 1. Xóa session app
   try{localStorage.setItem('cmi_so','1');}catch(e){}
-  // 2. Xóa session
   try{localStorage.removeItem('cmi_u');}catch(e){}
-  // 3. Dừng timers
+  // 2. Dừng timers
   if(MSG_BG_TIMER){clearInterval(MSG_BG_TIMER);MSG_BG_TIMER=null;}
   if(MSG_POLL_TIMER){clearInterval(MSG_POLL_TIMER);MSG_POLL_TIMER=null;}
   if(KPI_REFRESH_TIMER){clearInterval(KPI_REFRESH_TIMER);KPI_REFRESH_TIMER=null;}
   // 3. Reset state
-
   WL_CACHE=null;
   U=null; deptId=null; accOpen=null;
   Object.keys(CH).forEach(function(k){ try{CH[k].destroy();}catch(e){} });
   CH={}; GS_DATA=[]; GS_HDR=[]; UNLOCKED={};
-  // 4. Về login + render nút Google
-  el('pg-app').style.display='none';
-  el('pg-login').style.display='flex';
-  el('l-err').style.display='none';
-  el('gsi-btn-wrap').innerHTML='';
-  initGoogleSignIn();
+  // 4. Logout khỏi Google (browser level) → sau đó redirect về app
+  // ⚠️ Điều này sẽ logout luôn Gmail, Drive và mọi Google service trên browser này.
+  var returnUrl = window.location.origin + window.location.pathname;
+  window.location.href = 'https://accounts.google.com/Logout?continue='
+    + encodeURIComponent(returnUrl);
 }
 
 // ═══════════════════════════════════════════════
@@ -1032,7 +1029,10 @@ function buildDeptLeft(){
     +'<button class="dr-apply" id="dr-apply-d">Apply</button></div>'
     +'<div class="lsec" style="margin-top:14px">Account</div>'
     +'<div style="font-size:11px;color:var(--mu);padding:6px 0">'
-    +'Logged in as: <b>'+(U&&U.email?U.email:'')+'</b></div></div>';
+    +'Logged in as: <b>'+(U&&U.email?U.email:'')+'</b></div>'
+    +'<a href="https://myaccount.google.com/signinoptions/password" target="_blank" rel="noopener"'
+    +' class="chpw-btn" style="display:block;text-decoration:none;text-align:left">🔑 Change Google Password</a>'
+    +'</div>';
 }
 
 function onPC(){
@@ -1368,7 +1368,10 @@ function buildbodLeft(){
   el('lp-body').innerHTML+=
     '<div class="lsec" style="margin-top:14px">Account</div>'
     +'<div style="font-size:11px;color:var(--mu);padding:6px 0">'
-    +'Logged in as: <b>'+(U&&U.email?U.email:'')+'</b></div></div>';
+    +'Logged in as: <b>'+(U&&U.email?U.email:'')+'</b></div>'
+    +'<a href="https://myaccount.google.com/signinoptions/password" target="_blank" rel="noopener"'
+    +' class="chpw-btn" style="display:block;text-decoration:none;text-align:left">🔑 Change Google Password</a>'
+    +'</div>';
 }
 
 function buildAccBody(dept){
