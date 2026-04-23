@@ -937,10 +937,11 @@ function getLastDataMonth(deptId){
 // (it needs getPass() to check localStorage passwords)
 
 function doLogout(){
-  // 1. Xóa session
+  // 1. Đánh dấu signed-out → initGoogleSignIn sẽ dùng prompt=login (bắt nhập password)
+  try{localStorage.setItem('cmi_so','1');}catch(e){}
+  // 2. Xóa session
   try{localStorage.removeItem('cmi_u');}catch(e){}
-  try{localStorage.removeItem('cmi_so');}catch(e){} // dọn flag cũ nếu còn sót
-  // 2. Dừng timers
+  // 3. Dừng timers
   if(MSG_BG_TIMER){clearInterval(MSG_BG_TIMER);MSG_BG_TIMER=null;}
   if(MSG_POLL_TIMER){clearInterval(MSG_POLL_TIMER);MSG_POLL_TIMER=null;}
   if(KPI_REFRESH_TIMER){clearInterval(KPI_REFRESH_TIMER);KPI_REFRESH_TIMER=null;}
@@ -2185,13 +2186,15 @@ function buildAdminPanel(){
 // ═══════════════════════════════════════════════
 // ── Initialize Google Sign-In button ──
 // ═══════════════════════════════════════════
-// OAUTH2 REDIRECT FLOW — V31
+// OAUTH2 REDIRECT FLOW — V32
 // Dùng window.location redirect.
-// Luôn dùng prompt='consent select_account':
-//   - consent đứng TRƯỚC: Google bắt buộc hiển thị consent screen (không thể bypass)
-//   - select_account: hiện account chooser để user chọn đúng tài khoản
-// Thứ tự này cắt đứt hoàn toàn chuỗi auto-login kể cả khi Chrome profile đã
-// từng "Allow" app này trước đây.
+//
+// Normal login:  prompt=select_account  → hiện account chooser
+// Post-logout:   prompt=login           → Google bắt nhập lại PASSWORD
+//
+// 'login' là OIDC prompt hợp lệ vì app dùng scope=openid (OIDC request).
+// Khác với 'consent' (chỉ hiện nút Continue), 'login' ép Google show trang
+// nhập email+password, cắt đứt hoàn toàn browser SSO session.
 // ═══════════════════════════════════════════
 function initGoogleSignIn(){
   if(!GOOGLE_CLIENT_ID||GOOGLE_CLIENT_ID.indexOf('YOUR_CLIENT')>=0){
@@ -2199,7 +2202,10 @@ function initGoogleSignIn(){
       +'text-align:center;padding:10px">⚠ GOOGLE_CLIENT_ID not configured.</div>';
     return;
   }
-  var prompt = 'consent select_account';
+  var signedOut = localStorage.getItem('cmi_so')==='1';
+  // Post-logout: 'login' → Google hiện trang nhập password (không thể bypass bằng SSO)
+  // Normal:      'select_account' → hiện account chooser
+  var prompt = signedOut ? 'login' : 'select_account';
   var redirectUri = window.location.origin + window.location.pathname;
   var authUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
     +'?client_id='    +encodeURIComponent(GOOGLE_CLIENT_ID)
