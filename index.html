@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V35</title>
+<title>CMI · KPI Dashboard V36</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -167,6 +167,11 @@ button{cursor:pointer}
 .ki-in{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--r);
   background:var(--sf);color:var(--tx);width:100%}
 .ki-in:focus{outline:none;border-color:var(--bl)}
+/* V36: per-KPI note field */
+.ki-note-in{padding:5px 9px;border:1px solid var(--bd);border-radius:var(--r);
+  background:var(--sf2);color:var(--mu);width:100%;font-size:11px;
+  font-style:italic;margin-top:3px}
+.ki-note-in:focus{outline:none;border-color:var(--bl);background:var(--sf);color:var(--tx)}
 .ki-ta{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--r);
   background:var(--sf);color:var(--tx);resize:none;min-height:50px;
   width:100%;font-family:inherit;font-size:12px;line-height:1.4}
@@ -896,7 +901,9 @@ function fetchNotesData(cb){
         if(!r[0])continue;
         NOTES_DATA.push({
           dept:r[0].trim(), month:parseInt(r[1]), year:parseInt(r[2]),
-          note:(r[3]||'').trim(), submitted_by:r[4]||'', submitted_at:r[5]||''
+          kpi_key:(r[3]||'').trim(),          // V36: which KPI ('' = dept-level monthly note)
+          note:(r[4]||'').trim(),
+          submitted_by:r[5]||'', submitted_at:r[6]||''
         });
       }
       if(cb)cb();
@@ -904,40 +911,48 @@ function fetchNotesData(cb){
     .catch(function(){if(cb)cb();});
 }
 
-// Returns latest note text for dept/year/month_0idx (null if none)
-function getNote(dept,year,m0){
+// Returns latest note text for dept/year/month_0idx/kpi_key (null if none)
+// kpi_key='' means dept-level monthly note; kpi_key='Orders_Booked_USD' = per-KPI note
+function getNote(dept,year,m0,kpi_key){
+  var key=kpi_key||'';
   var found=null;
   for(var i=0;i<NOTES_DATA.length;i++){
     var n=NOTES_DATA[i];
-    if(n.dept===dept&&(n.month-1)===m0&&n.year===year) found=n;
+    if(n.dept===dept&&(n.month-1)===m0&&n.year===year&&(n.kpi_key||'')===key) found=n;
   }
   return found?found.note:null;
 }
 
 // Build {label→note} map for a range (used by tooltip)
-function buildNoteMap(did,range){
+// kpi_key='' for dept-level note, or specific KPI key for per-chart note
+function buildNoteMap(did,range,kpi_key){
   var map={};
   range.labels.forEach(function(lbl,i){
     var dk=range.dkeys[i];
-    var note=getNote(did,dk.y,dk.m);
+    var note=getNote(did,dk.y,dk.m,kpi_key||'');
     if(note)map[lbl]=note;
   });
   return map;
 }
 
-function saveNote(dept,month1,year,noteText){
+function saveNote(dept,month1,year,kpi_key,noteText){
   if(!SCRIPT_URL)return;
   var params='action=saveNote'
     +'&dept='+encodeURIComponent(dept)
     +'&month='+encodeURIComponent(month1)
     +'&year='+encodeURIComponent(year)
+    +'&kpi_key='+encodeURIComponent(kpi_key||'')
     +'&note='+encodeURIComponent(noteText)
     +'&submitted_by='+encodeURIComponent(U?U.username:'')
     +'&t='+Date.now();
   var beacon=new Image();
   beacon.src=SCRIPT_URL+'?'+params;
-  // Optimistic local update — append to NOTES_DATA
-  NOTES_DATA.push({dept:dept,month:month1,year:year,note:noteText,
+  // Optimistic local update
+  // Remove old entry for same key first, then push new
+  NOTES_DATA=NOTES_DATA.filter(function(n){
+    return!(n.dept===dept&&(n.month-1)===(month1-1)&&n.year===year&&(n.kpi_key||'')===(kpi_key||''));
+  });
+  NOTES_DATA.push({dept:dept,month:month1,year:year,kpi_key:kpi_key||'',note:noteText,
     submitted_by:U?U.username:'',submitted_at:new Date().toLocaleString()});
 }
 
@@ -1079,20 +1094,25 @@ function buildDeptLeft(){
     if(v!=null&&pv!=null&&pv!==0){
       var p=((v-pv)/Math.abs(pv)*100);
       dlt=(p>=0?'▲':'▼')+Math.abs(p).toFixed(1)+'%';
-      // Color: green = better direction, red = worse direction
       var isUp=(p>=0);
-      var betterUp=(k.better!=='down'); // default to 'up' if not set
+      var betterUp=(k.better!=='down');
       dc=(isUp===betterUp)?'du':'dd';
     }
     var revSpan=revCount>1?'<span class="rev-badge">'+ordinal(revCount)+'</span>':'';
     var deltaSpan=dlt?'<span class="ki-delta '+dc+'">'+dlt+'<span class="ki-vs"> vs '+MN[prevM0]+'</span></span>':'';
+    var kpiNoteVal=(getNote(deptId,selY,selM,k.k)||'').replace(/"/g,'&quot;'); // V36
     return '<div class="ki">'
       +'<div class="ki-lbl-row"><label>'+k.l+' <span style="color:var(--hi);font-weight:400">('+k.u+')</span></label>'
       +'<span style="display:flex;align-items:center;gap:3px">'+revSpan+deltaSpan+'</span></div>'
       +'<input class="ki-in" type="number" id="ki-'+k.k+'"'
       +' step="'+(k.t==='p'?'0.01':'1')+'"'
       +' value="'+(v!=null?v:'')+'" placeholder="—"'
-      +(isLocked?' readonly style="background:var(--sf2);color:var(--mu)"':'')+'></div>';
+      +(isLocked?' readonly style="background:var(--sf2);color:var(--mu)"':'')+'>'
+      // V36: per-KPI note input
+      +'<input class="ki-note-in" type="text" id="ki-note-'+k.k+'"'
+      +' value="'+kpiNoteVal+'" placeholder="📝 Note for '+k.l+'… (optional)"'
+      +(isLocked?' readonly':'')+'>'
+      +'</div>';
   }).join('');
   var drMO=function(sel){return MN.map(function(m,i){return '<option value="'+i+'"'+(i===sel?' selected':'')+'>'+m+'</option>';}).join('');};
   var drYO=function(sel){return YRS.map(function(y){return '<option value="'+y+'"'+(y===sel?' selected':'')+'>'+y+'</option>';}).join('');};
@@ -1118,9 +1138,9 @@ function buildDeptLeft(){
     +'<label>📝 Monthly Note <span style="font-weight:400;color:var(--hi)">(shown on charts)</span></label>'
     +(existingNote?'<span style="font-size:10px;color:var(--gn);font-weight:600">Saved</span>':'')
     +'</div>'
-    +'<textarea class="ki-ta" id="ki-note" placeholder="E.g. Large tender received, market conditions…" rows="3">'+existingNote+'</textarea>'
-    +'<button type="button" id="note-save-btn" style="margin-top:5px;width:100%;padding:6px;border:none;border-radius:var(--r);background:var(--gn);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Save Note</button>'
-    +'<div id="note-ok" style="display:none;font-size:11px;color:var(--gn);text-align:center;margin-top:4px;font-weight:600">✓ Note saved</div>'
+    +'<textarea class="ki-ta" id="ki-note-monthly" placeholder="E.g. Large tender received, market conditions…" rows="3">'+existingNote+'</textarea>'
+    +'<button type="button" id="note-save-btn" style="margin-top:5px;width:100%;padding:6px;border:none;border-radius:var(--r);background:var(--gn);color:#fff;font-size:12px;font-weight:600;cursor:pointer">💾 Save All Notes</button>'
+    +'<div id="note-ok" style="display:none;font-size:11px;color:var(--gn);text-align:center;margin-top:4px;font-weight:600">✓ Notes saved</div>'
     +'</div>'
     +(isLocked
         ?'<div class="lock-bar">🔒 Submitted — locked <button class="edit-btn" id="btn-unlock">✏️ Edit &amp; revise</button></div>'
@@ -1234,16 +1254,26 @@ function saveDept(){
   beacon.src=SCRIPT_URL+'?'+params+'&t='+Date.now();
 }
 
-// V35: Save KPI_Note from manager form
+// V36: Save all KPI notes (per-KPI + monthly dept note) from manager form
 function saveNoteFromForm(){
-  var ta=el('ki-note');
   var ok=el('note-ok');
-  if(!ta)return;
-  var txt=ta.value.trim();
-  if(!txt)return;
-  saveNote(deptId,selM+1,selY,txt);
-  if(ok){ok.style.display='block';setTimeout(function(){ok.style.display='none';},3000);}
-  // Refresh charts so tooltip reflects new note
+  var dept=DEPTS.find(function(d){return d.id===deptId;});
+  var saved=false;
+  // 1. Save per-KPI notes
+  dept.kpis.forEach(function(k){
+    var ta=el('ki-note-'+k.k);
+    if(ta&&ta.value.trim()!==''){
+      saveNote(deptId,selM+1,selY,k.k,ta.value.trim());
+      saved=true;
+    }
+  });
+  // 2. Save monthly dept-level note
+  var mta=el('ki-note-monthly');
+  if(mta&&mta.value.trim()!==''){
+    saveNote(deptId,selM+1,selY,'',mta.value.trim());
+    saved=true;
+  }
+  if(saved&&ok){ok.style.display='block';setTimeout(function(){ok.style.display='none';},3000);}
   renderDeptRight();
 }
 
@@ -1282,7 +1312,7 @@ function renderDeptRight(){
         +'<div class="cc-clickhint">Click to expand</div>'
         +'<div class="cc-w"><canvas id="'+cid+'"></canvas></div>';
       col.appendChild(div);
-      CH[cid]=mkLine(cid,range.labels,kpi.l,vals,dept.color,kpi.u,buildNoteMap(deptId,range));
+      CH[cid]=mkLine(cid,range.labels,kpi.l,vals,dept.color,kpi.u,buildNoteMap(deptId,range,kpi.k));
     });
   }
 }
@@ -1358,8 +1388,9 @@ function renderOverlayChart(col, cid, oc, range, did, gridMode){
       return _origLbl(ctx);
     };
   }
-  // V35: KPI_Note tooltip — show note for the hovered month on all charts
-  var _noteMap=buildNoteMap(did,range);
+  // V36: use specific kpi_key for single-dataset charts; '' (dept-level) for twoBar combos
+  var _noteKpiKey = (!isTwoBar && oc.datasets.length===1) ? oc.datasets[0].key : '';
+  var _noteMap=buildNoteMap(did,range,_noteKpiKey);
   opts.plugins.tooltip.callbacks.afterBody=function(items){
     var lbl=items[0]&&items[0].label;
     var note=_noteMap[lbl];
@@ -1546,15 +1577,18 @@ function buildAccBody(dept){
     if(v!=null&&pv!=null&&pv!==0){
       var p=((v-pv)/Math.abs(pv)*100);
       dlt=(p>=0?'▲':'▼')+Math.abs(p).toFixed(1)+'%';
-      // Color: green = better direction, red = worse direction
       var isUp=(p>=0);
-      var betterUp=(k.better!=='down'); // default to 'up' if not set
+      var betterUp=(k.better!=='down');
       dc=(isUp===betterUp)?'du':'dd';
     }
-    return '<div class="ks-row">'
+    var kpiNote=getNote(dept.id,curY,curM0,k.k)||''; // V36
+    return '<div class="ks-row" style="flex-direction:column;align-items:flex-start;padding:5px 0">'
+      +'<div style="display:flex;align-items:baseline;width:100%">'
       +'<span class="ks-l">'+k.l+'</span>'
       +'<span class="ks-v" style="color:'+dept.color+'">'+(v!=null?fmtV(v,k):'—')+'</span>'
       +(dlt?'<span class="ks-d '+dc+'">'+dlt+'</span>':'')
+      +'</div>'
+      +(kpiNote?'<div style="font-size:10px;color:var(--mu);padding:1px 0 0 0;font-style:italic;line-height:1.4">📝 '+kpiNote+'</div>':'')
       +'</div>';
   }).join('');
   var cmt=row?getGSVal(dept.id,curY,curM0,'comment')||'':'';
@@ -1672,7 +1706,7 @@ function renderbodRight(id){
     DEPTS.forEach(function(d,i){
       var range=buildRange(d.id);
       var vals=range.dkeys.map(function(dk){return getGSVal(d.id,dk.y,dk.m,d.kpis[0].k);});
-      CH['b_ov_'+i]=mkLine('b_ov_'+i,range.labels,d.kpis[0].l,vals,d.color,d.kpis[0].u,buildNoteMap(d.id,range));
+      CH['b_ov_'+i]=mkLine('b_ov_'+i,range.labels,d.kpis[0].l,vals,d.color,d.kpis[0].u,buildNoteMap(d.id,range,d.kpis[0].k));
     });
     return;
   }
@@ -1705,7 +1739,7 @@ function renderbodRight(id){
         +'<div class="cc-s">'+kpi.u+' · '+rangeLabel(range)+'</div>'
         +'<div class="cc-w"><canvas id="'+cid+'"></canvas></div>';
       col.appendChild(div);
-      CH[cid]=mkLine(cid,range.labels,kpi.l,vals,dept.color,kpi.u,buildNoteMap(id,range));
+      CH[cid]=mkLine(cid,range.labels,kpi.l,vals,dept.color,kpi.u,buildNoteMap(id,range,kpi.k));
     });
   }
 }
