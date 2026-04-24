@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V36</title>
+<title>CMI · KPI Dashboard V37</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -923,14 +923,24 @@ function getNote(dept,year,m0,kpi_key){
   return found?found.note:null;
 }
 
-// Build {label→note} map for a range (used by tooltip)
-// kpi_key='' for dept-level note, or specific KPI key for per-chart note
+// V37: Build note lines for tooltip — shows BOTH kpi-specific note AND monthly dept note
+// Returns {label → [line, line, ...]} — Chart.js afterBody accepts string array
 function buildNoteMap(did,range,kpi_key){
   var map={};
   range.labels.forEach(function(lbl,i){
     var dk=range.dkeys[i];
-    var note=getNote(did,dk.y,dk.m,kpi_key||'');
-    if(note)map[lbl]=note;
+    var kpiNote  = kpi_key ? getNote(did,dk.y,dk.m,kpi_key) : null;
+    var monthly  = getNote(did,dk.y,dk.m,'');
+    var lines=[];
+    if(kpiNote){
+      var kl=kpiNote.split('\n');
+      kl.forEach(function(l,j){ lines.push((j===0?'📝 ':' ')+l); });
+    }
+    if(monthly){
+      var ml=monthly.split('\n');
+      ml.forEach(function(l,j){ lines.push((j===0?(kpiNote?'🗓 ':'🗓 '):' ')+l); });
+    }
+    if(lines.length) map[lbl]=lines;
   });
   return map;
 }
@@ -1078,8 +1088,7 @@ function buildDeptLeft(){
   var dept=DEPTS.find(function(d){return d.id===deptId;});
   var row=getGSRow(deptId,selY,selM);
   var saved=!!row;
-  var comment=saved?getGSVal(deptId,selY,selM,'comment')||'':'';
-  var existingNote=getNote(deptId,selY,selM)||''; // V35
+  var existingNote=getNote(deptId,selY,selM,'')||''; // V37: monthly note (Comment removed)
   var prevM0=selM===0?11:selM-1;
   var prevY=selM===0?selY-1:selY;
   var prevRow=getGSRow(deptId,prevY,prevM0);
@@ -1129,22 +1138,16 @@ function buildDeptLeft(){
     +'<div style="padding:0 13px"><div class="lsec">'+dept.name+' ('+dept.abbr+') — '+MN[selM]+' '+selY+'</div>'
     +'<div class="dept-purpose">'+dept.purpose+'</div>'
     +'<div class="ki-list">'+inputs+'</div>'
+    // V37: Monthly Note — no Comment field (removed), no separate Save button
+    // Notes are saved together with "Save KPIs"; locked/unlocked together
     +'<div class="ki" style="margin-bottom:13px">'
-    +'<label>Comment</label>'
-    +'<textarea class="ki-ta" id="ki-cmt" placeholder="Notes…">'+comment+'</textarea></div>'
-    // V35: KPI_Note block — editable, saved separately to KPI_Notes sheet
-    +'<div class="ki" style="margin-bottom:13px">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">'
-    +'<label>📝 Monthly Note <span style="font-weight:400;color:var(--hi)">(shown on charts)</span></label>'
-    +(existingNote?'<span style="font-size:10px;color:var(--gn);font-weight:600">Saved</span>':'')
-    +'</div>'
-    +'<textarea class="ki-ta" id="ki-note-monthly" placeholder="E.g. Large tender received, market conditions…" rows="3">'+existingNote+'</textarea>'
-    +'<button type="button" id="note-save-btn" style="margin-top:5px;width:100%;padding:6px;border:none;border-radius:var(--r);background:var(--gn);color:#fff;font-size:12px;font-weight:600;cursor:pointer">💾 Save All Notes</button>'
-    +'<div id="note-ok" style="display:none;font-size:11px;color:var(--gn);text-align:center;margin-top:4px;font-weight:600">✓ Notes saved</div>'
-    +'</div>'
+    +'<label>📝 Monthly Note <span style="font-weight:400;color:var(--hi)">(shown on all charts this month)</span></label>'
+    +'<textarea class="ki-ta" id="ki-note-monthly" placeholder="E.g. tender received, market conditions, production issue…" rows="3"'
+    +(isLocked?' readonly style="background:var(--sf2);color:var(--mu)"':'')
+    +'>'+existingNote+'</textarea></div>'
     +(isLocked
         ?'<div class="lock-bar">🔒 Submitted — locked <button class="edit-btn" id="btn-unlock">✏️ Edit &amp; revise</button></div>'
-        :'<button class="sv-btn" id="sv-btn"><span class="spin" id="sv-sp"></span><span id="sv-lb">Save KPIs</span></button>'
+        :'<button class="sv-btn" id="sv-btn"><span class="spin" id="sv-sp"></span><span id="sv-lb">💾 Save KPIs &amp; Notes</span></button>'
      )
     +'<div class="sv-ok" id="sv-ok">✓ Saved to Google Sheets</div>'
     +'<div class="sv-er" id="sv-er"></div>'
@@ -1214,9 +1217,10 @@ function saveDept(){
       if(h==='submitted_by')return U.username;
       return payload[h]!=null?String(payload[h]):'';
     });
-    GS_DATA.push(newRow); // always append = new revision
+    GS_DATA.push(newRow);
+    saveAllNotesFromForm(); // V37: save notes locally too
     delete UNLOCKED[deptId+'_'+selY+'_'+selM];
-    sp.style.display='none'; lb.textContent='Save KPIs';
+    sp.style.display='none'; lb.textContent='💾 Save KPIs & Notes';
     ok.style.display='block';
     var badge=el('st-badge');if(badge){badge.textContent='Submitted';badge.className='badge bg';}
     buildDeptLeft();
@@ -1224,12 +1228,14 @@ function saveDept(){
     setTimeout(function(){ok.style.display='none';},3000);
     return;
   }
-  // Send to GAS via Image beacon — completely bypasses CORS
-  // GAS saves to sheet; we update UI locally without waiting for response
+  // Send KPI to GAS via Image beacon
   var params='action=saveKPI';
   Object.keys(payload).forEach(function(k){
     params+='&'+encodeURIComponent(k)+'='+encodeURIComponent(payload[k]!=null?payload[k]:'');
   });
+
+  // V37: Also save all notes (separate beacons, fire-and-forget)
+  saveAllNotesFromForm();
 
   // Update UI locally immediately (optimistic update)
   var newRow=GS_HDR.map(function(h){
@@ -1242,39 +1248,29 @@ function saveDept(){
   });
   GS_DATA.push(newRow);
   delete UNLOCKED[deptId+'_'+selY+'_'+selM];
-  sp.style.display='none'; lb.textContent='Save KPIs';
+  sp.style.display='none'; lb.textContent='💾 Save KPIs & Notes';
   ok.textContent='✓ Saved to Google Sheets';
   ok.style.display='block';
   var badge=el('st-badge');if(badge){badge.textContent='Submitted';badge.className='badge bg';}
   buildDeptLeft(); renderDeptRight();
   setTimeout(function(){ok.style.display='none';},3000);
 
-  // Fire-and-forget to GAS via img beacon (no CORS, no response needed)
+  // Fire-and-forget KPI beacon
   var beacon=new Image();
   beacon.src=SCRIPT_URL+'?'+params+'&t='+Date.now();
 }
 
-// V36: Save all KPI notes (per-KPI + monthly dept note) from manager form
-function saveNoteFromForm(){
-  var ok=el('note-ok');
+// V37: Save all notes — called by saveDept automatically (no standalone button)
+function saveAllNotesFromForm(){
   var dept=DEPTS.find(function(d){return d.id===deptId;});
-  var saved=false;
-  // 1. Save per-KPI notes
+  // 1. Per-KPI notes
   dept.kpis.forEach(function(k){
     var ta=el('ki-note-'+k.k);
-    if(ta&&ta.value.trim()!==''){
-      saveNote(deptId,selM+1,selY,k.k,ta.value.trim());
-      saved=true;
-    }
+    if(ta&&ta.value.trim()!=='') saveNote(deptId,selM+1,selY,k.k,ta.value.trim());
   });
-  // 2. Save monthly dept-level note
+  // 2. Monthly dept-level note
   var mta=el('ki-note-monthly');
-  if(mta&&mta.value.trim()!==''){
-    saveNote(deptId,selM+1,selY,'',mta.value.trim());
-    saved=true;
-  }
-  if(saved&&ok){ok.style.display='block';setTimeout(function(){ok.style.display='none';},3000);}
-  renderDeptRight();
+  if(mta&&mta.value.trim()!=='') saveNote(deptId,selM+1,selY,'',mta.value.trim());
 }
 
 // ═══════════════════════════════════════════════
@@ -1373,6 +1369,8 @@ function renderOverlayChart(col, cid, oc, range, did, gridMode){
     if(lw)lw.innerHTML+='<div class="legend-item"><span class="legend-dot" style="background:#6366F1;border-radius:50%"></span>Ratio %</div>';
   }
   var opts=chartOpts(oc.unit||'');
+  // V37: KPI note key — single-dataset charts use their kpi key; twoBar uses '' (monthly only)
+  var _noteKpiKey = (!isTwoBar && oc.datasets.length===1) ? oc.datasets[0].key : '';
   if(isTwoBar){opts.scales.y2={type:'linear',position:'right',
     grid:{drawOnChartArea:false},
     ticks:{font:{size:10},color:'#6366F1',callback:function(v){return v+'%';}},
@@ -1388,13 +1386,12 @@ function renderOverlayChart(col, cid, oc, range, did, gridMode){
       return _origLbl(ctx);
     };
   }
-  // V36: use specific kpi_key for single-dataset charts; '' (dept-level) for twoBar combos
-  var _noteKpiKey = (!isTwoBar && oc.datasets.length===1) ? oc.datasets[0].key : '';
+  // V37: tooltip shows KPI note + Monthly Note, with line breaks
   var _noteMap=buildNoteMap(did,range,_noteKpiKey);
   opts.plugins.tooltip.callbacks.afterBody=function(items){
     var lbl=items[0]&&items[0].label;
-    var note=_noteMap[lbl];
-    if(note)return['','📝 '+note];
+    var lines=_noteMap[lbl];
+    if(lines&&lines.length)return[''].concat(lines);
     return[];
   };
   opts.plugins.datalabels={
@@ -1813,12 +1810,12 @@ function chartOpts(unit){
 function mkLine(id,labels,label,data,color,unit,noteMap){
   var many=labels.length>24;
   var opts=chartOpts(unit);
-  // V35: show KPI_Note in tooltip if noteMap provided
+  // V37: show KPI note + Monthly Note in tooltip
   if(noteMap){
     opts.plugins.tooltip.callbacks.afterBody=function(items){
       var lbl=items[0]&&items[0].label;
-      var note=noteMap[lbl];
-      if(note)return['','📝 '+note];
+      var lines=noteMap[lbl];
+      if(lines&&lines.length)return[''].concat(lines);
       return[];
     };
   }
@@ -2613,7 +2610,6 @@ document.addEventListener('DOMContentLoaded',function(){
       bodViewDept(dept);return;
     }
     if(t.closest('#sv-btn')){saveDept();return;}
-    if(t.id==='note-save-btn'||t.closest('#note-save-btn')){saveNoteFromForm();return;} // V35
     if(t.id==='btn-unlock'||t.closest('#btn-unlock')){UNLOCKED[deptId+'_'+selY+'_'+selM]=true;buildDeptLeft();return;}
     // btn-chpw removed (no password in Gmail auth)
     if(t.dataset.quick){setQ(t.dataset.quick);return;}
