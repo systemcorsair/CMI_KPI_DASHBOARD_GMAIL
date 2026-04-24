@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard GMAIL</title>
+<title>CMI · KPI Dashboard V35</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -445,6 +445,9 @@ var SHEET_ID  = '126wR-AZZ3DeB6ozFSDimKr_WXnmGdMZ8SsdcItOdJ4c';
 var SHEET_GID = '0'; // tab: KPI
 var SHEET_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID
               + '/export?format=csv&gid=' + SHEET_GID;
+// V35: KPI Notes sheet — create tab "KPI_Notes", get its GID, paste here
+var NOTES_GID = '184552079'; // e.g. '987654321'
+var NOTES_URL = ''; // auto-built in fetchNotesData()
 var SCRIPT_URL  = 'https://script.google.com/macros/s/AKfycbxnRoEXthlN_VXaEBdbmpwAevMR-PV_Abml2mNhC4R4CVcNYyLGM4dOsWMYs2lTNXJJ0A/exec';
 var GAS_PW_URL  = 'https://script.google.com/macros/s/AKfycbxnRoEXthlN_VXaEBdbmpwAevMR-PV_Abml2mNhC4R4CVcNYyLGM4dOsWMYs2lTNXJJ0A/exec';
 var GAS_MSG_URL = 'https://script.google.com/macros/s/AKfycbxnRoEXthlN_VXaEBdbmpwAevMR-PV_Abml2mNhC4R4CVcNYyLGM4dOsWMYs2lTNXJJ0A/exec';
@@ -599,7 +602,7 @@ var DEPTS = [
      {title:'Qualified Leads',   unit:'No.', datasets:[{key:'Qualified_Leads',     label:'Leads',       color:'#EC4899',type:'bar'}]},
      {title:'Cost per Lead',     unit:'USD', datasets:[{key:'Cost_Per_Lead_USD',   label:'Cost/Lead',   color:'#F472B6',type:'line'}]},
      {title:'Conversion Rate %', unit:'%',   datasets:[{key:'Conversion_Rate_pct', label:'Conversion %',color:'#BE185D',type:'line'}]},
-     {title:'Campaigns Active',  unit:'No.', datasets:[{key:'Campaigns_Active',    label:'Campaigns',   color:'#DB2777',type:'bar'}]},
+	 {title:'Campaigns Active',  unit:'No.', datasets:[{key:'Campaigns_Active',    label:'Campaigns',   color:'#DB2777',type:'bar'}]},
    ]},
 
   {id:'CS', name:'Customer Service', abbr:'CS', color:'#0891B2', ini:'VN', mgr:'Van Nguyen',
@@ -673,10 +676,10 @@ var DEPTS = [
   {id:'IT', name:'IT Systems', abbr:'IT', color:'#0EA5E9', ini:'LT', mgr:'Mr Le Tuan Anh',
    purpose:'Reliable systems and continuous improvement.',
    kpis:[
-     {k:'System_Uptime_pct',          l:'System Uptime',              u:'%',   t:'p', better:'up'},
-     {k:'Cyber_Incidents',            l:'Cyber Incidents',            u:'No.', t:'i', better:'down'},
-     {k:'Tickets_Closed_SLA_pct',     l:'Tickets Closed within SLA',  u:'%',   t:'p', better:'up'},
-     {k:'Enhancement_Delivery',       l:'Enhancement Delivery',       u:'No.', t:'i', better:'up'},
+     {k:'System_Uptime_pct',          l:'System Uptime',              u:'%',   t:'p'},
+     {k:'Cyber_Incidents',            l:'Cyber Incidents',            u:'No.', t:'i'},
+     {k:'Tickets_Closed_SLA_pct',     l:'Tickets Closed within SLA',  u:'%',   t:'p'},
+     {k:'Enhancement_Delivery',       l:'Enhancement Delivery',       u:'No.', t:'i'},
    ],
    overlayCharts:[
      {title:'System Uptime %',             unit:'%',   datasets:[{key:'System_Uptime_pct',      label:'Uptime %',       color:'#0EA5E9',type:'line'}]},
@@ -688,9 +691,9 @@ var DEPTS = [
   {id:'PROP', name:'Property & Security', abbr:'PROP', color:'#84CC16', ini:'RP', mgr:'Rudy/Mr Phong',
    purpose:'Safe, compliant and well-maintained facilities.',
    kpis:[
-     {k:'Maintenance_Backlog',        l:'Maintenance Backlog',        u:'No.', t:'i', better:'down'},
-     {k:'Fire_OHS_Compliance_pct',    l:'Fire & OHS Compliance',      u:'%',   t:'p', better:'up'},
-     {k:'Security_Incidents',         l:'Security Incidents',         u:'No.', t:'i', better:'down'},
+     {k:'Maintenance_Backlog',        l:'Maintenance Backlog',        u:'No.', t:'i'},
+     {k:'Fire_OHS_Compliance_pct',    l:'Fire & OHS Compliance',      u:'%',   t:'p'},
+     {k:'Security_Incidents',         l:'Security Incidents',         u:'No.', t:'i'},
    ],
    overlayCharts:[
      {title:'Maintenance Backlog',     unit:'No.', datasets:[{key:'Maintenance_Backlog',     label:'Backlog Items',  color:'#84CC16',type:'bar'}]},
@@ -840,6 +843,7 @@ var USERS = {
 // STATE
 // ═══════════════════════════════════════════════
 var GS_DATA = [], GS_HDR = [];
+var NOTES_DATA = []; // V35: {dept,month(1-idx),year,note,submitted_by,submitted_at}
 var U = null, deptId = null, selY = NY, selM = NM;
 var drF = {y:NY-1, m:0}, drT = {y:NY, m:NM};
 var accOpen = null;
@@ -866,12 +870,75 @@ function fetchSheetData(cb){
       GS_HDR  = parsed[0].map(function(h){ return h.trim(); });
       GS_DATA = parsed.slice(1).filter(function(r){ return r[0] && r[0].trim(); });
       setSyncBadge('ok', GS_DATA.length);
-      if(cb)cb();
+      fetchNotesData(cb); // V35: load notes in parallel
     })
     .catch(function(){
       setSyncBadge('offline', 0);
       if(cb)cb();
     });
+}
+
+// ═══════════════════════════════════════════════
+// V35 — KPI NOTES (separate sheet tab)
+// Columns: dept | month | year | note | submitted_by | submitted_at
+// ═══════════════════════════════════════════════
+function fetchNotesData(cb){
+  if(!NOTES_GID){if(cb)cb();return;}
+  var url='https://docs.google.com/spreadsheets/d/'+SHEET_ID
+    +'/export?format=csv&gid='+NOTES_GID+'&t='+Date.now();
+  fetch(url)
+    .then(function(r){return r.text();})
+    .then(function(csv){
+      var rows=parseCSV(csv);
+      NOTES_DATA=[];
+      for(var i=1;i<rows.length;i++){
+        var r=rows[i];
+        if(!r[0])continue;
+        NOTES_DATA.push({
+          dept:r[0].trim(), month:parseInt(r[1]), year:parseInt(r[2]),
+          note:(r[3]||'').trim(), submitted_by:r[4]||'', submitted_at:r[5]||''
+        });
+      }
+      if(cb)cb();
+    })
+    .catch(function(){if(cb)cb();});
+}
+
+// Returns latest note text for dept/year/month_0idx (null if none)
+function getNote(dept,year,m0){
+  var found=null;
+  for(var i=0;i<NOTES_DATA.length;i++){
+    var n=NOTES_DATA[i];
+    if(n.dept===dept&&(n.month-1)===m0&&n.year===year) found=n;
+  }
+  return found?found.note:null;
+}
+
+// Build {label→note} map for a range (used by tooltip)
+function buildNoteMap(did,range){
+  var map={};
+  range.labels.forEach(function(lbl,i){
+    var dk=range.dkeys[i];
+    var note=getNote(did,dk.y,dk.m);
+    if(note)map[lbl]=note;
+  });
+  return map;
+}
+
+function saveNote(dept,month1,year,noteText){
+  if(!SCRIPT_URL)return;
+  var params='action=saveNote'
+    +'&dept='+encodeURIComponent(dept)
+    +'&month='+encodeURIComponent(month1)
+    +'&year='+encodeURIComponent(year)
+    +'&note='+encodeURIComponent(noteText)
+    +'&submitted_by='+encodeURIComponent(U?U.username:'')
+    +'&t='+Date.now();
+  var beacon=new Image();
+  beacon.src=SCRIPT_URL+'?'+params;
+  // Optimistic local update — append to NOTES_DATA
+  NOTES_DATA.push({dept:dept,month:month1,year:year,note:noteText,
+    submitted_by:U?U.username:'',submitted_at:new Date().toLocaleString()});
 }
 
 function parseCSV(text){
@@ -980,7 +1047,7 @@ function doLogout(){
   WL_CACHE=null;
   U=null; deptId=null; accOpen=null;
   Object.keys(CH).forEach(function(k){ try{CH[k].destroy();}catch(e){} });
-  CH={}; GS_DATA=[]; GS_HDR=[]; UNLOCKED={};
+  CH={}; GS_DATA=[]; GS_HDR=[]; NOTES_DATA=[]; UNLOCKED={};
   // 5. Về login page
   el('pg-app').style.display='none';
   el('pg-login').style.display='flex';
@@ -997,7 +1064,7 @@ function buildDeptLeft(){
   var row=getGSRow(deptId,selY,selM);
   var saved=!!row;
   var comment=saved?getGSVal(deptId,selY,selM,'comment')||'':'';
-  // Previous month for delta indicators
+  var existingNote=getNote(deptId,selY,selM)||''; // V35
   var prevM0=selM===0?11:selM-1;
   var prevY=selM===0?selY-1:selY;
   var prevRow=getGSRow(deptId,prevY,prevM0);
@@ -1045,6 +1112,16 @@ function buildDeptLeft(){
     +'<div class="ki" style="margin-bottom:13px">'
     +'<label>Comment</label>'
     +'<textarea class="ki-ta" id="ki-cmt" placeholder="Notes…">'+comment+'</textarea></div>'
+    // V35: KPI_Note block — editable, saved separately to KPI_Notes sheet
+    +'<div class="ki" style="margin-bottom:13px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">'
+    +'<label>📝 Monthly Note <span style="font-weight:400;color:var(--hi)">(shown on charts)</span></label>'
+    +(existingNote?'<span style="font-size:10px;color:var(--gn);font-weight:600">Saved</span>':'')
+    +'</div>'
+    +'<textarea class="ki-ta" id="ki-note" placeholder="E.g. Large tender received, market conditions…" rows="3">'+existingNote+'</textarea>'
+    +'<button type="button" id="note-save-btn" style="margin-top:5px;width:100%;padding:6px;border:none;border-radius:var(--r);background:var(--gn);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Save Note</button>'
+    +'<div id="note-ok" style="display:none;font-size:11px;color:var(--gn);text-align:center;margin-top:4px;font-weight:600">✓ Note saved</div>'
+    +'</div>'
     +(isLocked
         ?'<div class="lock-bar">🔒 Submitted — locked <button class="edit-btn" id="btn-unlock">✏️ Edit &amp; revise</button></div>'
         :'<button class="sv-btn" id="sv-btn"><span class="spin" id="sv-sp"></span><span id="sv-lb">Save KPIs</span></button>'
@@ -1157,6 +1234,19 @@ function saveDept(){
   beacon.src=SCRIPT_URL+'?'+params+'&t='+Date.now();
 }
 
+// V35: Save KPI_Note from manager form
+function saveNoteFromForm(){
+  var ta=el('ki-note');
+  var ok=el('note-ok');
+  if(!ta)return;
+  var txt=ta.value.trim();
+  if(!txt)return;
+  saveNote(deptId,selM+1,selY,txt);
+  if(ok){ok.style.display='block';setTimeout(function(){ok.style.display='none';},3000);}
+  // Refresh charts so tooltip reflects new note
+  renderDeptRight();
+}
+
 // ═══════════════════════════════════════════════
 // DEPT VIEW — RIGHT PANEL
 // ═══════════════════════════════════════════════
@@ -1192,7 +1282,7 @@ function renderDeptRight(){
         +'<div class="cc-clickhint">Click to expand</div>'
         +'<div class="cc-w"><canvas id="'+cid+'"></canvas></div>';
       col.appendChild(div);
-      CH[cid]=mkLine(cid,range.labels,kpi.l,vals,dept.color,kpi.u);
+      CH[cid]=mkLine(cid,range.labels,kpi.l,vals,dept.color,kpi.u,buildNoteMap(deptId,range));
     });
   }
 }
@@ -1256,7 +1346,26 @@ function renderOverlayChart(col, cid, oc, range, did, gridMode){
   if(isTwoBar){opts.scales.y2={type:'linear',position:'right',
     grid:{drawOnChartArea:false},
     ticks:{font:{size:10},color:'#6366F1',callback:function(v){return v+'%';}},
-    title:{display:true,text:'Ratio %',color:'#6366F1',font:{size:10,weight:'600'}}};}
+    title:{display:true,text:'Ratio %',color:'#6366F1',font:{size:10,weight:'600'}}};
+    // FIX V35: Ratio % tooltip was showing "$37" instead of "37%" because chartOpts
+    // uses the chart's unit (USD) for all datasets. Override to detect Ratio % series.
+    var _origLbl=opts.plugins.tooltip.callbacks.label;
+    opts.plugins.tooltip.callbacks.label=function(ctx){
+      if(ctx.dataset.label==='Ratio %'){
+        var v=ctx.raw;if(v==null)return'No data';
+        return'Ratio: '+(Math.round(v*10)/10)+'%';
+      }
+      return _origLbl(ctx);
+    };
+  }
+  // V35: KPI_Note tooltip — show note for the hovered month on all charts
+  var _noteMap=buildNoteMap(did,range);
+  opts.plugins.tooltip.callbacks.afterBody=function(items){
+    var lbl=items[0]&&items[0].label;
+    var note=_noteMap[lbl];
+    if(note)return['','📝 '+note];
+    return[];
+  };
   opts.plugins.datalabels={
     display:function(ctx){
       if(many)return false;
@@ -1449,9 +1558,11 @@ function buildAccBody(dept){
       +'</div>';
   }).join('');
   var cmt=row?getGSVal(dept.id,curY,curM0,'comment')||'':'';
+  var note=getNote(dept.id,curY,curM0)||''; // V35
   return '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--hi);margin-bottom:6px">Snapshot — '+MN[curM0]+' '+curY+revBadge+'</div>'
     +'<div>'+rows+'</div>'
     +(cmt?'<div class="ks-cmt">'+cmt+'</div>':'')
+    +(note?'<div style="margin-top:6px;padding:6px 8px;background:#f0f9f5;border-radius:var(--r);font-size:11px;color:var(--gn);border:1px solid #b6e6d4;line-height:1.5"><span style="font-weight:700">📝 Note:</span> '+note+'</div>':'')
     +'<button class="vc-btn" data-dept="'+dept.id+'">View all charts →</button>';
 }
 
@@ -1561,7 +1672,7 @@ function renderbodRight(id){
     DEPTS.forEach(function(d,i){
       var range=buildRange(d.id);
       var vals=range.dkeys.map(function(dk){return getGSVal(d.id,dk.y,dk.m,d.kpis[0].k);});
-      CH['b_ov_'+i]=mkLine('b_ov_'+i,range.labels,d.kpis[0].l,vals,d.color,d.kpis[0].u);
+      CH['b_ov_'+i]=mkLine('b_ov_'+i,range.labels,d.kpis[0].l,vals,d.color,d.kpis[0].u,buildNoteMap(d.id,range));
     });
     return;
   }
@@ -1594,7 +1705,7 @@ function renderbodRight(id){
         +'<div class="cc-s">'+kpi.u+' · '+rangeLabel(range)+'</div>'
         +'<div class="cc-w"><canvas id="'+cid+'"></canvas></div>';
       col.appendChild(div);
-      CH[cid]=mkLine(cid,range.labels,kpi.l,vals,dept.color,kpi.u);
+      CH[cid]=mkLine(cid,range.labels,kpi.l,vals,dept.color,kpi.u,buildNoteMap(id,range));
     });
   }
 }
@@ -1665,9 +1776,18 @@ function chartOpts(unit){
   };
 }
 
-function mkLine(id,labels,label,data,color,unit){
+function mkLine(id,labels,label,data,color,unit,noteMap){
   var many=labels.length>24;
   var opts=chartOpts(unit);
+  // V35: show KPI_Note in tooltip if noteMap provided
+  if(noteMap){
+    opts.plugins.tooltip.callbacks.afterBody=function(items){
+      var lbl=items[0]&&items[0].label;
+      var note=noteMap[lbl];
+      if(note)return['','📝 '+note];
+      return[];
+    };
+  }
   opts.plugins.datalabels={
     display:!many,color:color,anchor:'end',align:'top',
     font:{size:9,weight:'600'},
@@ -2459,6 +2579,7 @@ document.addEventListener('DOMContentLoaded',function(){
       bodViewDept(dept);return;
     }
     if(t.closest('#sv-btn')){saveDept();return;}
+    if(t.id==='note-save-btn'||t.closest('#note-save-btn')){saveNoteFromForm();return;} // V35
     if(t.id==='btn-unlock'||t.closest('#btn-unlock')){UNLOCKED[deptId+'_'+selY+'_'+selM]=true;buildDeptLeft();return;}
     // btn-chpw removed (no password in Gmail auth)
     if(t.dataset.quick){setQ(t.dataset.quick);return;}
