@@ -673,10 +673,10 @@ var DEPTS = [
   {id:'IT', name:'IT Systems', abbr:'IT', color:'#0EA5E9', ini:'LT', mgr:'Mr Le Tuan Anh',
    purpose:'Reliable systems and continuous improvement.',
    kpis:[
-     {k:'System_Uptime_pct',          l:'System Uptime',              u:'%',   t:'p'},
-     {k:'Cyber_Incidents',            l:'Cyber Incidents',            u:'No.', t:'i'},
-     {k:'Tickets_Closed_SLA_pct',     l:'Tickets Closed within SLA',  u:'%',   t:'p'},
-     {k:'Enhancement_Delivery',       l:'Enhancement Delivery',       u:'No.', t:'i'},
+     {k:'System_Uptime_pct',          l:'System Uptime',              u:'%',   t:'p', better:'up'},
+     {k:'Cyber_Incidents',            l:'Cyber Incidents',            u:'No.', t:'i', better:'down'},
+     {k:'Tickets_Closed_SLA_pct',     l:'Tickets Closed within SLA',  u:'%',   t:'p', better:'up'},
+     {k:'Enhancement_Delivery',       l:'Enhancement Delivery',       u:'No.', t:'i', better:'up'},
    ],
    overlayCharts:[
      {title:'System Uptime %',             unit:'%',   datasets:[{key:'System_Uptime_pct',      label:'Uptime %',       color:'#0EA5E9',type:'line'}]},
@@ -688,9 +688,9 @@ var DEPTS = [
   {id:'PROP', name:'Property & Security', abbr:'PROP', color:'#84CC16', ini:'RP', mgr:'Rudy/Mr Phong',
    purpose:'Safe, compliant and well-maintained facilities.',
    kpis:[
-     {k:'Maintenance_Backlog',        l:'Maintenance Backlog',        u:'No.', t:'i'},
-     {k:'Fire_OHS_Compliance_pct',    l:'Fire & OHS Compliance',      u:'%',   t:'p'},
-     {k:'Security_Incidents',         l:'Security Incidents',         u:'No.', t:'i'},
+     {k:'Maintenance_Backlog',        l:'Maintenance Backlog',        u:'No.', t:'i', better:'down'},
+     {k:'Fire_OHS_Compliance_pct',    l:'Fire & OHS Compliance',      u:'%',   t:'p', better:'up'},
+     {k:'Security_Incidents',         l:'Security Incidents',         u:'No.', t:'i', better:'down'},
    ],
    overlayCharts:[
      {title:'Maintenance Backlog',     unit:'No.', datasets:[{key:'Maintenance_Backlog',     label:'Backlog Items',  color:'#84CC16',type:'bar'}]},
