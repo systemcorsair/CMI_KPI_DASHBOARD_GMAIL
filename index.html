@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V38</title>
+<title>CMI · KPI Dashboard V39</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -1370,29 +1370,34 @@ function attachAxisNoteTooltip(chart, did, range){
   document.body.appendChild(tip);
 
   function onMove(e){
-    var ca=chart.chartArea; if(!ca){tip.style.display='none';return;}
+    var ca=chart.chartArea;
+    if(!ca){tip.style.display='none';return;}
     var rect=canvas.getBoundingClientRect();
-    var sx=canvas.width/rect.width||1; var sy=canvas.height/rect.height||1;
-    var mx=(e.clientX-rect.left)*sx;
-    var my=(e.clientY-rect.top)*sy;
-    // X-axis label zone: just below the chart area (ca.bottom to ca.bottom+50px scaled)
-    if(my>ca.bottom&&my<ca.bottom+50*sy&&mx>ca.left&&mx<ca.right){
+    // FIX V39: use CSS pixels only — chartArea & getPixelForIndex() are both CSS px
+    // Do NOT multiply by devicePixelRatio; that caused zone detection to fail entirely
+    var mx=e.clientX-rect.left;
+    var my=e.clientY-rect.top;
+
+    // X-axis label zone: between ca.bottom and bottom of canvas (CSS px)
+    var canvasH=rect.height;
+    if(my>=ca.bottom&&my<=canvasH&&mx>=ca.left&&mx<=ca.right){
       var xScale=chart.scales&&chart.scales.x;
       if(!xScale){tip.style.display='none';return;}
       var labels=chart.data.labels;
       var best=-1,bestD=Infinity;
       labels.forEach(function(lbl,i){
-        var px=xScale.getPixelForIndex(i);
+        var px=xScale.getPixelForIndex(i); // CSS px
         var d=Math.abs(mx-px);
         if(d<bestD){bestD=d;best=i;}
       });
-      if(best>=0&&bestD<80){
+      if(best>=0){
         var dk=range.dkeys[best];
         var note=dk?getNote(did,dk.y,dk.m,''):null;
         if(note){
-          tip.textContent='🗓 '+note;
+          // FIX V39: render line breaks as newlines in pre-wrap div
+          tip.textContent='🗓  '+note;
           tip.style.display='block';
-          tip.style.left=(e.clientX+14)+'px';
+          tip.style.left=(e.clientX+16)+'px';
           tip.style.top=(e.clientY-10)+'px';
           return;
         }
@@ -1403,7 +1408,6 @@ function attachAxisNoteTooltip(chart, did, range){
   function onLeave(){tip.style.display='none';}
   canvas.addEventListener('mousemove',onMove);
   canvas.addEventListener('mouseleave',onLeave);
-  // Store refs for cleanup
   chart._axisNoteTip=tip;
   chart._axisNoteHandlers={move:onMove,leave:onLeave,canvas:canvas};
 }
@@ -1672,21 +1676,26 @@ function buildAccBody(dept){
       dc=(isUp===betterUp)?'du':'dd';
     }
     var kpiNote=getNote(dept.id,curY,curM0,k.k)||''; // V36
+    // FIX V39: convert \n to <br> for HTML rendering
+    var kpiNoteHtml=kpiNote?kpiNote.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>'):'';
     return '<div class="ks-row" style="flex-direction:column;align-items:flex-start;padding:5px 0">'
       +'<div style="display:flex;align-items:baseline;width:100%">'
       +'<span class="ks-l">'+k.l+'</span>'
       +'<span class="ks-v" style="color:'+dept.color+'">'+(v!=null?fmtV(v,k):'—')+'</span>'
       +(dlt?'<span class="ks-d '+dc+'">'+dlt+'</span>':'')
       +'</div>'
-      +(kpiNote?'<div style="font-size:10px;color:var(--mu);padding:1px 0 0 0;font-style:italic;line-height:1.4">📝 '+kpiNote+'</div>':'')
+      +(kpiNoteHtml?'<div style="font-size:10px;color:var(--mu);padding:1px 0 0 0;line-height:1.4">📝 '+kpiNoteHtml+'</div>':'')
       +'</div>';
   }).join('');
   var cmt=row?getGSVal(dept.id,curY,curM0,'comment')||'':'';
-  var note=getNote(dept.id,curY,curM0)||''; // V35
+  var note=getNote(dept.id,curY,curM0,'')||''; // V39: fixed — pass kpi_key=''
+  // FIX V39: convert \n → <br> for HTML rendering
+  var noteHtml=note?note.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>'):'';
+  var cmtHtml=cmt?cmt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>'):'';
   return '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--hi);margin-bottom:6px">Snapshot — '+MN[curM0]+' '+curY+revBadge+'</div>'
     +'<div>'+rows+'</div>'
-    +(cmt?'<div class="ks-cmt">'+cmt+'</div>':'')
-    +(note?'<div style="margin-top:6px;padding:6px 8px;background:#f0f9f5;border-radius:var(--r);font-size:11px;color:var(--gn);border:1px solid #b6e6d4;line-height:1.5"><span style="font-weight:700">📝 Note:</span> '+note+'</div>':'')
+    +(cmtHtml?'<div class="ks-cmt">'+cmtHtml+'</div>':'')
+    +(noteHtml?'<div style="margin-top:6px;padding:6px 8px;background:#f0f9f5;border-radius:var(--r);font-size:11px;color:var(--gn);border:1px solid #b6e6d4;line-height:1.6"><span style="font-weight:700">🗓 Monthly Note:</span><br>'+noteHtml+'</div>':'')
     +'<button class="vc-btn" data-dept="'+dept.id+'">View all charts →</button>';
 }
 
