@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V37</title>
+<title>CMI · KPI Dashboard V38</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -1308,9 +1308,115 @@ function renderDeptRight(){
         +'<div class="cc-clickhint">Click to expand</div>'
         +'<div class="cc-w"><canvas id="'+cid+'"></canvas></div>';
       col.appendChild(div);
-      CH[cid]=mkLine(cid,range.labels,kpi.l,vals,dept.color,kpi.u,buildNoteMap(deptId,range,kpi.k));
+      CH[cid]=mkLine(cid,range.labels,kpi.l,vals,dept.color,kpi.u,{did:deptId,range:range,kpiKey:kpi.k});
     });
   }
+}
+
+// ═══════════════════════════════════════════════
+// V38 — NOTE TOOLTIP SYSTEM
+// • KPI note  → appears in Chart.js tooltip on bar/point hover (label callback)
+// • Monthly note → appears in custom floating div on X-axis label hover
+// ═══════════════════════════════════════════════
+
+// Format a raw value to display string based on unit
+function fmtTooltipVal(v, unit){
+  if(v==null) return 'No data';
+  if(unit==='%') return (Math.round(v*10)/10)+'%';
+  if(unit==='USD') return '$'+Math.round(v).toLocaleString();
+  if(unit==='hrs'||unit==='count'||unit==='cnt'||unit==='ppl'||unit==='No.') return Math.round(v).toLocaleString();
+  return (Math.round(v*100)/100).toString();
+}
+
+// Build tooltip label callback that appends KPI note below the value
+// oc = the overlayChart config (has .datasets[].key); for mkLine pass null + kpiKey directly
+function makeNoteLabel(unit, oc, did, range, singleKpiKey){
+  return function(ctx){
+    // Ratio % line always formats as %
+    if(ctx.dataset.label==='Ratio %'){
+      var rv=ctx.raw; if(rv==null) return 'No data';
+      return 'Ratio: '+(Math.round(rv*10)/10)+'%';
+    }
+    var v=ctx.raw;
+    var valueStr=fmtTooltipVal(v, unit);
+    // Determine which KPI key this dataset belongs to
+    var kpiKey=singleKpiKey||'';
+    if(oc&&oc.datasets&&oc.datasets[ctx.datasetIndex]){
+      kpiKey=oc.datasets[ctx.datasetIndex].key||'';
+    }
+    // Look up KPI note for this specific bar's month
+    var dk=range&&range.dkeys&&range.dkeys[ctx.dataIndex];
+    if(kpiKey&&dk){
+      var note=getNote(did,dk.y,dk.m,kpiKey);
+      if(note){
+        var lines=[valueStr];
+        note.split('\n').forEach(function(l,i){lines.push((i===0?'  📝 ':'     ')+l);});
+        return lines;
+      }
+    }
+    return valueStr;
+  };
+}
+
+// Attach a floating monthly-note tooltip triggered by hovering the X-axis label area
+function attachAxisNoteTooltip(chart, did, range){
+  if(!chart||!chart.canvas||!did||!range) return;
+  var canvas=chart.canvas;
+  var tip=document.createElement('div');
+  tip.style.cssText='position:fixed;z-index:9999;background:rgba(18,18,15,.93);color:#fff;'
+    +'padding:7px 12px;border-radius:7px;font-size:11px;line-height:1.6;max-width:280px;'
+    +'pointer-events:none;display:none;white-space:pre-wrap;'
+    +'box-shadow:0 4px 14px rgba(0,0,0,.35)';
+  document.body.appendChild(tip);
+
+  function onMove(e){
+    var ca=chart.chartArea; if(!ca){tip.style.display='none';return;}
+    var rect=canvas.getBoundingClientRect();
+    var sx=canvas.width/rect.width||1; var sy=canvas.height/rect.height||1;
+    var mx=(e.clientX-rect.left)*sx;
+    var my=(e.clientY-rect.top)*sy;
+    // X-axis label zone: just below the chart area (ca.bottom to ca.bottom+50px scaled)
+    if(my>ca.bottom&&my<ca.bottom+50*sy&&mx>ca.left&&mx<ca.right){
+      var xScale=chart.scales&&chart.scales.x;
+      if(!xScale){tip.style.display='none';return;}
+      var labels=chart.data.labels;
+      var best=-1,bestD=Infinity;
+      labels.forEach(function(lbl,i){
+        var px=xScale.getPixelForIndex(i);
+        var d=Math.abs(mx-px);
+        if(d<bestD){bestD=d;best=i;}
+      });
+      if(best>=0&&bestD<80){
+        var dk=range.dkeys[best];
+        var note=dk?getNote(did,dk.y,dk.m,''):null;
+        if(note){
+          tip.textContent='🗓 '+note;
+          tip.style.display='block';
+          tip.style.left=(e.clientX+14)+'px';
+          tip.style.top=(e.clientY-10)+'px';
+          return;
+        }
+      }
+    }
+    tip.style.display='none';
+  }
+  function onLeave(){tip.style.display='none';}
+  canvas.addEventListener('mousemove',onMove);
+  canvas.addEventListener('mouseleave',onLeave);
+  // Store refs for cleanup
+  chart._axisNoteTip=tip;
+  chart._axisNoteHandlers={move:onMove,leave:onLeave,canvas:canvas};
+}
+
+function detachAxisNoteTooltip(chart){
+  if(!chart) return;
+  if(chart._axisNoteHandlers){
+    var h=chart._axisNoteHandlers;
+    try{h.canvas.removeEventListener('mousemove',h.move);}catch(e){}
+    try{h.canvas.removeEventListener('mouseleave',h.leave);}catch(e){}
+    chart._axisNoteHandlers=null;
+  }
+  if(chart._axisNoteTip){try{chart._axisNoteTip.remove();}catch(e){} chart._axisNoteTip=null;}
 }
 
 // shared overlay chart renderer
@@ -1369,31 +1475,15 @@ function renderOverlayChart(col, cid, oc, range, did, gridMode){
     if(lw)lw.innerHTML+='<div class="legend-item"><span class="legend-dot" style="background:#6366F1;border-radius:50%"></span>Ratio %</div>';
   }
   var opts=chartOpts(oc.unit||'');
-  // V37: KPI note key — single-dataset charts use their kpi key; twoBar uses '' (monthly only)
-  var _noteKpiKey = (!isTwoBar && oc.datasets.length===1) ? oc.datasets[0].key : '';
   if(isTwoBar){opts.scales.y2={type:'linear',position:'right',
     grid:{drawOnChartArea:false},
     ticks:{font:{size:10},color:'#6366F1',callback:function(v){return v+'%';}},
     title:{display:true,text:'Ratio %',color:'#6366F1',font:{size:10,weight:'600'}}};
-    // FIX V35: Ratio % tooltip was showing "$37" instead of "37%" because chartOpts
-    // uses the chart's unit (USD) for all datasets. Override to detect Ratio % series.
-    var _origLbl=opts.plugins.tooltip.callbacks.label;
-    opts.plugins.tooltip.callbacks.label=function(ctx){
-      if(ctx.dataset.label==='Ratio %'){
-        var v=ctx.raw;if(v==null)return'No data';
-        return'Ratio: '+(Math.round(v*10)/10)+'%';
-      }
-      return _origLbl(ctx);
-    };
   }
-  // V37: tooltip shows KPI note + Monthly Note, with line breaks
-  var _noteMap=buildNoteMap(did,range,_noteKpiKey);
-  opts.plugins.tooltip.callbacks.afterBody=function(items){
-    var lbl=items[0]&&items[0].label;
-    var lines=_noteMap[lbl];
-    if(lines&&lines.length)return[''].concat(lines);
-    return[];
-  };
+  // V38: label callback = value format + per-KPI note (Ratio % fix included in makeNoteLabel)
+  opts.plugins.tooltip.callbacks.label=makeNoteLabel(oc.unit||'',oc,did,range);
+  // V38: monthly note shown via X-axis hover — not in tooltip afterBody
+  opts.plugins.tooltip.callbacks.afterBody=function(){return[];};
   opts.plugins.datalabels={
     display:function(ctx){
       if(many)return false;
@@ -1420,6 +1510,9 @@ function renderOverlayChart(col, cid, oc, range, did, gridMode){
     data:{labels:range.labels,datasets:datasets},
     options:opts,plugins:[ChartDataLabels]
   });
+  // V38: attach monthly-note X-axis tooltip + store metadata for drill-down re-attach
+  CH[cid]._noteOpts={did:did,range:range,oc:oc,unit:oc.unit||'',isOverlay:true};
+  attachAxisNoteTooltip(CH[cid],did,range);
   // ── Summary total chart (right side) for two-bar plan/actual charts ──
   if(isTwoBar&&document.getElementById(cid+'-tot')){
     var totA=va.reduce(function(s,v){return s+(v||0);},0);
@@ -1703,7 +1796,7 @@ function renderbodRight(id){
     DEPTS.forEach(function(d,i){
       var range=buildRange(d.id);
       var vals=range.dkeys.map(function(dk){return getGSVal(d.id,dk.y,dk.m,d.kpis[0].k);});
-      CH['b_ov_'+i]=mkLine('b_ov_'+i,range.labels,d.kpis[0].l,vals,d.color,d.kpis[0].u,buildNoteMap(d.id,range,d.kpis[0].k));
+      CH['b_ov_'+i]=mkLine('b_ov_'+i,range.labels,d.kpis[0].l,vals,d.color,d.kpis[0].u,{did:d.id,range:range,kpiKey:d.kpis[0].k});
     });
     return;
   }
@@ -1736,7 +1829,7 @@ function renderbodRight(id){
         +'<div class="cc-s">'+kpi.u+' · '+rangeLabel(range)+'</div>'
         +'<div class="cc-w"><canvas id="'+cid+'"></canvas></div>';
       col.appendChild(div);
-      CH[cid]=mkLine(cid,range.labels,kpi.l,vals,dept.color,kpi.u,buildNoteMap(id,range,kpi.k));
+      CH[cid]=mkLine(cid,range.labels,kpi.l,vals,dept.color,kpi.u,{did:id,range:range,kpiKey:kpi.k});
     });
   }
 }
@@ -1760,7 +1853,11 @@ function rangeLabel(range){
 }
 function killCharts(pfx){
   Object.keys(CH).filter(function(k){return k.indexOf(pfx)===0;})
-    .forEach(function(k){try{CH[k].destroy();}catch(e){}delete CH[k];});
+    .forEach(function(k){
+      detachAxisNoteTooltip(CH[k]); // V38
+      try{CH[k].destroy();}catch(e){}
+      delete CH[k];
+    });
 }
 
 // FIX #1: fmtV rounds to 1 decimal for percentages, no float noise
@@ -1807,17 +1904,13 @@ function chartOpts(unit){
   };
 }
 
-function mkLine(id,labels,label,data,color,unit,noteMap){
+function mkLine(id,labels,label,data,color,unit,noteOpts){
   var many=labels.length>24;
   var opts=chartOpts(unit);
-  // V37: show KPI note + Monthly Note in tooltip
-  if(noteMap){
-    opts.plugins.tooltip.callbacks.afterBody=function(items){
-      var lbl=items[0]&&items[0].label;
-      var lines=noteMap[lbl];
-      if(lines&&lines.length)return[''].concat(lines);
-      return[];
-    };
+  // V38: KPI note in label callback + X-axis monthly note via attachAxisNoteTooltip
+  if(noteOpts&&noteOpts.did&&noteOpts.range){
+    opts.plugins.tooltip.callbacks.label=makeNoteLabel(unit,null,noteOpts.did,noteOpts.range,noteOpts.kpiKey||'');
+    opts.plugins.tooltip.callbacks.afterBody=function(){return[];};
   }
   opts.plugins.datalabels={
     display:!many,color:color,anchor:'end',align:'top',
@@ -1830,7 +1923,7 @@ function mkLine(id,labels,label,data,color,unit,noteMap){
       return Math.round(v);
     }
   };
-  return new Chart(document.getElementById(id),{
+  var chart=new Chart(document.getElementById(id),{
     type:'line',
     data:{labels:labels,datasets:[{label:label,data:data,
       borderColor:color,backgroundColor:color+'40',tension:.3,fill:true,
@@ -1840,6 +1933,12 @@ function mkLine(id,labels,label,data,color,unit,noteMap){
       spanGaps:true}]},
     options:opts,plugins:[ChartDataLabels]
   });
+  // V38: attach monthly-note axis tooltip + store metadata for drill-down
+  if(noteOpts&&noteOpts.did&&noteOpts.range){
+    chart._noteOpts={did:noteOpts.did,range:noteOpts.range,unit:unit,kpiKey:noteOpts.kpiKey||'',isOverlay:false};
+    attachAxisNoteTooltip(chart,noteOpts.did,noteOpts.range);
+  }
+  return chart;
 }
 
 
@@ -2214,10 +2313,21 @@ function openDrill(title, chartInstance, sub){
     cfg.options.plugins.datalabels.font={size:11,weight:'700'};
   }
   drillChart=new Chart(el('drill-canvas'),cfg);
+  // V38: re-apply note tooltips (JSON.parse strips functions from source chart)
+  var nOpts=chartInstance._noteOpts;
+  if(nOpts&&nOpts.did&&nOpts.range){
+    var labelFn=nOpts.isOverlay
+      ? makeNoteLabel(nOpts.unit,nOpts.oc,nOpts.did,nOpts.range)
+      : makeNoteLabel(nOpts.unit,null,nOpts.did,nOpts.range,nOpts.kpiKey||'');
+    drillChart.options.plugins.tooltip.callbacks.label=labelFn;
+    drillChart.options.plugins.tooltip.callbacks.afterBody=function(){return[];};
+    drillChart.update('none');
+    attachAxisNoteTooltip(drillChart,nOpts.did,nOpts.range);
+  }
 }
 function closeDrill(){
   el('drill-ov').style.display='none';
-  if(drillChart){try{drillChart.destroy();}catch(e){} drillChart=null;}
+  if(drillChart){detachAxisNoteTooltip(drillChart);try{drillChart.destroy();}catch(e){} drillChart=null;}
 }
 
 // ═══════════════════════════════════════════════
