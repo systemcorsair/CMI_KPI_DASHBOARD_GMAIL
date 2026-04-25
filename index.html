@@ -1202,7 +1202,7 @@ function saveDept(){
   sp.style.display='inline-block'; lb.textContent='Saving…';
   ok.style.display='none'; er.style.display='none';
   var payload={dept:deptId, month:selM+1, year:selY, // month+1 for sheet (1-indexed)
-    submitted_by:U.username, comment:el('ki-cmt').value||''};
+    submitted_by:U.username;	// V40: removed comment field (deleted in V37)
   dept.kpis.forEach(function(k){
     var inp=el('ki-'+k.k);
     if(inp&&inp.value!=='')payload[k.k]=parseFloat(inp.value);
