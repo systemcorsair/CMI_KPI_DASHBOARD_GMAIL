@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V42</title>
+<title>CMI · KPI Dashboard V43</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -1330,6 +1330,79 @@ function renderDeptRight(){
   }
 }
 
+
+// ═══════════════════════════════════════════════
+// V43 — NOTED-MONTH AXIS MARKERS
+// Months with any note get: colored label + dot marker + underline
+// ═══════════════════════════════════════════════
+
+// Returns {index: true} for every range slot that has any note (monthly or KPI)
+function buildNotedIndices(did, range){
+  var set={};
+  if(!did||!range||!range.dkeys) return set;
+  var dept=DEPTS.find(function(d){return d.id===did;});
+  range.dkeys.forEach(function(dk,i){
+    if(getNote(did,dk.y,dk.m,'')) {set[i]=true;return;}
+    if(dept) dept.kpis.forEach(function(k){
+      if(getNote(did,dk.y,dk.m,k.k)) set[i]=true;
+    });
+  });
+  return set;
+}
+
+// Mutate opts.scales.x in-place: disable autoSkip, colour noted ticks
+function applyNoteAxisConfig(opts, notedIdx){
+  if(!Object.keys(notedIdx).length) return;
+  // Show ALL labels when notes exist (user requirement V43)
+  opts.scales.x.autoSkip=false;
+  delete opts.scales.x.maxTicksLimit;
+  // Use smaller font to avoid overlap across 16 months
+  opts.scales.x.ticks=opts.scales.x.ticks||{};
+  opts.scales.x.ticks.font={size:9};
+  opts.scales.x.ticks.maxRotation=45;
+  // Noted months get accent colour
+  opts.scales.x.ticks.color=function(ctx){
+    return notedIdx[ctx.index]?'#6366F1':'#888';
+  };
+}
+
+// Inline Chart.js plugin: draws a small dot + underline below noted tick labels
+function buildNoteMarkerPlugin(notedIdx){
+  return{
+    id:'noteAxisMarker',
+    afterDraw:function(chart){
+      var keys=Object.keys(notedIdx);
+      if(!keys.length) return;
+      var ctx=chart.ctx;
+      var xScale=chart.scales&&chart.scales.x;
+      if(!xScale||!xScale.ticks||!xScale.ticks.length) return;
+      var ca=chart.chartArea;
+      ctx.save();
+      xScale.ticks.forEach(function(tick,i){
+        if(!notedIdx[i]) return;
+        // getPixelForTick exists in Chart.js 4
+        var px=xScale.getPixelForTick(i);
+        if(px===undefined||isNaN(px)) return;
+        // Dot just below chartArea bottom (above the label)
+        var dotY=ca.bottom+5;
+        ctx.beginPath();
+        ctx.arc(px,dotY,3,0,Math.PI*2);
+        ctx.fillStyle='#6366F1';
+        ctx.fill();
+        // Short underline at label baseline (~26px below chartArea.bottom)
+        var ulY=ca.bottom+26;
+        ctx.beginPath();
+        ctx.moveTo(px-12,ulY);
+        ctx.lineTo(px+12,ulY);
+        ctx.strokeStyle='#6366F1';
+        ctx.lineWidth=1.5;
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+  };
+}
+
 // ═══════════════════════════════════════════════
 // V38 — NOTE TOOLTIP SYSTEM
 // • KPI note  → appears in Chart.js tooltip on bar/point hover (label callback)
@@ -1500,6 +1573,10 @@ function renderOverlayChart(col, cid, oc, range, did, gridMode){
   opts.plugins.tooltip.callbacks.label=makeNoteLabel(oc.unit||'',oc,did,range);
   // V38: monthly note shown via X-axis hover — not in tooltip afterBody
   opts.plugins.tooltip.callbacks.afterBody=function(){return[];};
+  // V43: noted-month axis markers
+  var _notedIdx=buildNotedIndices(did,range);
+  applyNoteAxisConfig(opts,_notedIdx);
+  var _markerPlugin=buildNoteMarkerPlugin(_notedIdx);
   opts.plugins.datalabels={
     display:function(ctx){
       if(many)return false;
@@ -1524,10 +1601,10 @@ function renderOverlayChart(col, cid, oc, range, did, gridMode){
   CH[cid]=new Chart(document.getElementById(cid),{
     type:'bar',
     data:{labels:range.labels,datasets:datasets},
-    options:opts,plugins:[ChartDataLabels]
+    options:opts,plugins:[ChartDataLabels,_markerPlugin]
   });
   // V38: attach monthly-note X-axis tooltip + store metadata for drill-down re-attach
-  CH[cid]._noteOpts={did:did,range:range,oc:oc,unit:oc.unit||'',isOverlay:true};
+  CH[cid]._noteOpts={did:did,range:range,oc:oc,unit:oc.unit||'',isOverlay:true,notedIdx:_notedIdx};
   attachAxisNoteTooltip(CH[cid],did,range);
   // ── Summary total chart (right side) for two-bar plan/actual charts ──
   if(isTwoBar&&document.getElementById(cid+'-tot')){
@@ -1929,9 +2006,15 @@ function mkLine(id,labels,label,data,color,unit,noteOpts){
   var many=labels.length>24;
   var opts=chartOpts(unit);
   // V38: KPI note in label callback + X-axis monthly note via attachAxisNoteTooltip
+  // V43: noted-month axis markers
+  var _notedIdxL={};
+  var _markerPluginL={id:'noop'};
   if(noteOpts&&noteOpts.did&&noteOpts.range){
     opts.plugins.tooltip.callbacks.label=makeNoteLabel(unit,null,noteOpts.did,noteOpts.range,noteOpts.kpiKey||'');
     opts.plugins.tooltip.callbacks.afterBody=function(){return[];};
+    _notedIdxL=buildNotedIndices(noteOpts.did,noteOpts.range);
+    applyNoteAxisConfig(opts,_notedIdxL);
+    _markerPluginL=buildNoteMarkerPlugin(_notedIdxL);
   }
   opts.plugins.datalabels={
     display:!many,color:color,anchor:'end',align:'top',
@@ -1952,11 +2035,11 @@ function mkLine(id,labels,label,data,color,unit,noteOpts){
       pointRadius:many?2:4,pointBackgroundColor:color,
       pointBorderColor:color,pointBorderWidth:2,
       spanGaps:true}]},
-    options:opts,plugins:[ChartDataLabels]
+    options:opts,plugins:[ChartDataLabels,_markerPluginL]
   });
   // V38: attach monthly-note axis tooltip + store metadata for drill-down
   if(noteOpts&&noteOpts.did&&noteOpts.range){
-    chart._noteOpts={did:noteOpts.did,range:noteOpts.range,unit:unit,kpiKey:noteOpts.kpiKey||'',isOverlay:false};
+    chart._noteOpts={did:noteOpts.did,range:noteOpts.range,unit:unit,kpiKey:noteOpts.kpiKey||'',isOverlay:false,notedIdx:_notedIdxL};
     attachAxisNoteTooltip(chart,noteOpts.did,noteOpts.range);
   }
   return chart;
@@ -2334,7 +2417,7 @@ function openDrill(title, chartInstance, sub){
     cfg.options.plugins.datalabels.font={size:11,weight:'700'};
   }
   drillChart=new Chart(el('drill-canvas'),cfg);
-  // V38: re-apply note tooltips (JSON.parse strips functions from source chart)
+  // V38: re-apply note tooltips; V43: re-apply axis marker plugin
   var nOpts=chartInstance._noteOpts;
   if(nOpts&&nOpts.did&&nOpts.range){
     var labelFn=nOpts.isOverlay
@@ -2342,6 +2425,11 @@ function openDrill(title, chartInstance, sub){
       : makeNoteLabel(nOpts.unit,null,nOpts.did,nOpts.range,nOpts.kpiKey||'');
     drillChart.options.plugins.tooltip.callbacks.label=labelFn;
     drillChart.options.plugins.tooltip.callbacks.afterBody=function(){return[];};
+    // V43: re-apply axis markers and label config
+    var _drillNoted=nOpts.notedIdx||buildNotedIndices(nOpts.did,nOpts.range);
+    applyNoteAxisConfig(drillChart.options,_drillNoted);
+    drillChart.config.plugins=drillChart.config.plugins||[];
+    drillChart.config.plugins.push(buildNoteMarkerPlugin(_drillNoted));
     drillChart.update('none');
     attachAxisNoteTooltip(drillChart,nOpts.did,nOpts.range);
   }
