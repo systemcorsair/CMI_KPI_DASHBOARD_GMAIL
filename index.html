@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V40</title>
+<title>CMI · KPI Dashboard V41</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -819,7 +819,17 @@ function startApp(){
   }));}catch(e){}
   fetchSheetData(function(){
     if(U.role==='bod'||U.role==='admin'){buildbodLeft();renderbodRight(null);}
-    else{deptId=U.dept;selY=NY;selM=NM;buildDeptLeft();renderDeptRight();}
+    else{
+      deptId=U.dept;
+      // V41: validate dept exists in DEPTS config before rendering
+      var deptExists=DEPTS.some(function(d){return d.id===deptId;});
+      if(!deptExists){
+        el('rp-body').innerHTML='<div style="padding:40px;text-align:center;color:var(--mu)">⚠ Department not found: <b>'+deptId+'</b><br>Please contact admin.</div>';
+        buildDeptLeft();
+        return;
+      }
+      selY=NY;selM=NM;buildDeptLeft();renderDeptRight();
+    }
   });
 }
 
@@ -1086,6 +1096,12 @@ function doLogout(){
 // ═══════════════════════════════════════════════
 function buildDeptLeft(){
   var dept=DEPTS.find(function(d){return d.id===deptId;});
+  if(!dept){
+    // V41: guard — deptId not set or invalid (e.g. session restored with stale dept)
+    // Fall back to login screen
+    el('lp-body').innerHTML='<div style="padding:24px;color:var(--mu);font-size:13px">⚠ Session expired. Please <a href="" onclick="doLogout();return false;">sign in again</a>.</div>';
+    return;
+  }
   var row=getGSRow(deptId,selY,selM);
   var saved=!!row;
   var existingNote=getNote(deptId,selY,selM,'')||''; // V37: monthly note (Comment removed)
@@ -1278,6 +1294,7 @@ function saveAllNotesFromForm(){
 // ═══════════════════════════════════════════════
 function renderDeptRight(){
   var dept=DEPTS.find(function(d){return d.id===deptId;});
+  if(!dept) return; // V41: guard — deptId not set or invalid
   el('rp-title').textContent=dept.name+' ('+dept.abbr+')';
   el('rp-sub').textContent=''; // purpose and manager removed from chart header (V14)
   el('btn-bod-back').classList.add('hidden');
