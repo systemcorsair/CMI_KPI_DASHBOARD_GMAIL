@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V41</title>
+<title>CMI · KPI Dashboard V42</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -1381,7 +1381,7 @@ function attachAxisNoteTooltip(chart, did, range){
   var canvas=chart.canvas;
   var tip=document.createElement('div');
   tip.style.cssText='position:fixed;z-index:9999;background:rgba(18,18,15,.93);color:#fff;'
-    +'padding:7px 12px;border-radius:7px;font-size:11px;line-height:1.6;max-width:280px;'
+    +'padding:7px 12px;border-radius:7px;font-size:11px;line-height:1.6;max-width:300px;'
     +'pointer-events:none;display:none;white-space:pre-wrap;'
     +'box-shadow:0 4px 14px rgba(0,0,0,.35)';
   document.body.appendChild(tip);
@@ -1390,29 +1390,24 @@ function attachAxisNoteTooltip(chart, did, range){
     var ca=chart.chartArea;
     if(!ca){tip.style.display='none';return;}
     var rect=canvas.getBoundingClientRect();
-    // FIX V39: use CSS pixels only — chartArea & getPixelForIndex() are both CSS px
-    // Do NOT multiply by devicePixelRatio; that caused zone detection to fail entirely
     var mx=e.clientX-rect.left;
     var my=e.clientY-rect.top;
-
-    // X-axis label zone: between ca.bottom and bottom of canvas (CSS px)
-    var canvasH=rect.height;
-    if(my>=ca.bottom&&my<=canvasH&&mx>=ca.left&&mx<=ca.right){
-      var xScale=chart.scales&&chart.scales.x;
-      if(!xScale){tip.style.display='none';return;}
+    if(my>=ca.bottom&&my<=rect.height&&mx>=ca.left&&mx<=ca.right){
       var labels=chart.data.labels;
+      if(!labels||!labels.length){tip.style.display='none';return;}
+      // V42 FIX: Chart.js 4 does not have getPixelForIndex — compute slot center manually
+      var slotW=(ca.right-ca.left)/labels.length;
       var best=-1,bestD=Infinity;
       labels.forEach(function(lbl,i){
-        var px=xScale.getPixelForIndex(i); // CSS px
+        var px=ca.left+slotW*i+slotW/2;
         var d=Math.abs(mx-px);
         if(d<bestD){bestD=d;best=i;}
       });
-      if(best>=0){
+      if(best>=0&&bestD<=slotW){
         var dk=range.dkeys[best];
         var note=dk?getNote(did,dk.y,dk.m,''):null;
         if(note){
-          // FIX V39: render line breaks as newlines in pre-wrap div
-          tip.textContent='🗓  '+note;
+          tip.textContent='🗓️  '+note;
           tip.style.display='block';
           tip.style.left=(e.clientX+16)+'px';
           tip.style.top=(e.clientY-10)+'px';
