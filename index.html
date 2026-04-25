@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V43</title>
+<title>CMI · KPI Dashboard V44</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -1337,6 +1337,7 @@ function renderDeptRight(){
 // ═══════════════════════════════════════════════
 
 // Returns {index: true} for every range slot that has any note (monthly or KPI)
+// V44: buildNotedIndices — reads NOTES_DATA at call time (dynamic)
 function buildNotedIndices(did, range){
   var set={};
   if(!did||!range||!range.dkeys) return set;
@@ -1350,50 +1351,63 @@ function buildNotedIndices(did, range){
   return set;
 }
 
-// Mutate opts.scales.x in-place: disable autoSkip, colour noted ticks
-function applyNoteAxisConfig(opts, notedIdx){
-  if(!Object.keys(notedIdx).length) return;
-  // Show ALL labels when notes exist (user requirement V43)
+// V44: Always apply — autoSkip=false unconditionally (16 months fits fine at font-size:9)
+// ticks.color is a CLOSURE that reads NOTES_DATA at render time, not at creation time
+function applyNoteAxisConfig(opts, did, range){
   opts.scales.x.autoSkip=false;
   delete opts.scales.x.maxTicksLimit;
-  // Use smaller font to avoid overlap across 16 months
   opts.scales.x.ticks=opts.scales.x.ticks||{};
   opts.scales.x.ticks.font={size:9};
   opts.scales.x.ticks.maxRotation=45;
-  // Noted months get accent colour
+  // Dynamic color — closure captures did+range, reads NOTES_DATA at render time
   opts.scales.x.ticks.color=function(ctx){
-    return notedIdx[ctx.index]?'#6366F1':'#888';
+    var dk=range&&range.dkeys&&range.dkeys[ctx.index];
+    if(!dk) return '#888';
+    var dept=DEPTS.find(function(d){return d.id===did;});
+    if(getNote(did,dk.y,dk.m,'')) return '#6366F1';
+    if(dept){
+      for(var ki=0;ki<dept.kpis.length;ki++){
+        if(getNote(did,dk.y,dk.m,dept.kpis[ki].k)) return '#6366F1';
+      }
+    }
+    return '#888';
   };
 }
 
-// Inline Chart.js plugin: draws a small dot + underline below noted tick labels
-function buildNoteMarkerPlugin(notedIdx){
+// V44: Plugin reads NOTES_DATA dynamically in afterDraw — works even if notes load after chart
+function buildNoteMarkerPlugin(did, range){
   return{
-    id:'noteAxisMarker',
+    id:'noteAxisMarker_'+did,
     afterDraw:function(chart){
-      var keys=Object.keys(notedIdx);
-      if(!keys.length) return;
-      var ctx=chart.ctx;
       var xScale=chart.scales&&chart.scales.x;
       if(!xScale||!xScale.ticks||!xScale.ticks.length) return;
       var ca=chart.chartArea;
+      var ctx=chart.ctx;
+      var hasAny=false;
       ctx.save();
       xScale.ticks.forEach(function(tick,i){
-        if(!notedIdx[i]) return;
-        // getPixelForTick exists in Chart.js 4
+        var dk=range&&range.dkeys&&range.dkeys[i];
+        if(!dk) return;
+        var dept=DEPTS.find(function(d){return d.id===did;});
+        var hasNote=!!getNote(did,dk.y,dk.m,'');
+        if(!hasNote&&dept){
+          for(var ki=0;ki<dept.kpis.length;ki++){
+            if(getNote(did,dk.y,dk.m,dept.kpis[ki].k)){hasNote=true;break;}
+          }
+        }
+        if(!hasNote) return;
+        hasAny=true;
         var px=xScale.getPixelForTick(i);
         if(px===undefined||isNaN(px)) return;
-        // Dot just below chartArea bottom (above the label)
-        var dotY=ca.bottom+5;
+        // Dot just below chartArea bottom (sits between chart and labels)
         ctx.beginPath();
-        ctx.arc(px,dotY,3,0,Math.PI*2);
+        ctx.arc(px,ca.bottom+5,3,0,Math.PI*2);
         ctx.fillStyle='#6366F1';
         ctx.fill();
-        // Short underline at label baseline (~26px below chartArea.bottom)
-        var ulY=ca.bottom+26;
+        // Underline below the tick label (~26px below chartArea)
         ctx.beginPath();
-        ctx.moveTo(px-12,ulY);
-        ctx.lineTo(px+12,ulY);
+        ctx.moveTo(px-14,ca.bottom+26);
+        ctx.lineTo(px+14,ca.bottom+26);
         ctx.strokeStyle='#6366F1';
         ctx.lineWidth=1.5;
         ctx.stroke();
@@ -1573,10 +1587,9 @@ function renderOverlayChart(col, cid, oc, range, did, gridMode){
   opts.plugins.tooltip.callbacks.label=makeNoteLabel(oc.unit||'',oc,did,range);
   // V38: monthly note shown via X-axis hover — not in tooltip afterBody
   opts.plugins.tooltip.callbacks.afterBody=function(){return[];};
-  // V43: noted-month axis markers
-  var _notedIdx=buildNotedIndices(did,range);
-  applyNoteAxisConfig(opts,_notedIdx);
-  var _markerPlugin=buildNoteMarkerPlugin(_notedIdx);
+  // V44: noted-month axis markers — dynamic, no need to pre-compute
+  var _markerPlugin=buildNoteMarkerPlugin(did,range);
+  applyNoteAxisConfig(opts,did,range);
   opts.plugins.datalabels={
     display:function(ctx){
       if(many)return false;
@@ -1604,7 +1617,7 @@ function renderOverlayChart(col, cid, oc, range, did, gridMode){
     options:opts,plugins:[ChartDataLabels,_markerPlugin]
   });
   // V38: attach monthly-note X-axis tooltip + store metadata for drill-down re-attach
-  CH[cid]._noteOpts={did:did,range:range,oc:oc,unit:oc.unit||'',isOverlay:true,notedIdx:_notedIdx};
+  CH[cid]._noteOpts={did:did,range:range,oc:oc,unit:oc.unit||'',isOverlay:true};
   attachAxisNoteTooltip(CH[cid],did,range);
   // ── Summary total chart (right side) for two-bar plan/actual charts ──
   if(isTwoBar&&document.getElementById(cid+'-tot')){
@@ -2007,14 +2020,12 @@ function mkLine(id,labels,label,data,color,unit,noteOpts){
   var opts=chartOpts(unit);
   // V38: KPI note in label callback + X-axis monthly note via attachAxisNoteTooltip
   // V43: noted-month axis markers
-  var _notedIdxL={};
-  var _markerPluginL={id:'noop'};
+  var _markerPluginL={id:'noop_mkline'};
   if(noteOpts&&noteOpts.did&&noteOpts.range){
     opts.plugins.tooltip.callbacks.label=makeNoteLabel(unit,null,noteOpts.did,noteOpts.range,noteOpts.kpiKey||'');
     opts.plugins.tooltip.callbacks.afterBody=function(){return[];};
-    _notedIdxL=buildNotedIndices(noteOpts.did,noteOpts.range);
-    applyNoteAxisConfig(opts,_notedIdxL);
-    _markerPluginL=buildNoteMarkerPlugin(_notedIdxL);
+    applyNoteAxisConfig(opts,noteOpts.did,noteOpts.range);   // V44: dynamic
+    _markerPluginL=buildNoteMarkerPlugin(noteOpts.did,noteOpts.range); // V44: dynamic
   }
   opts.plugins.datalabels={
     display:!many,color:color,anchor:'end',align:'top',
@@ -2039,7 +2050,7 @@ function mkLine(id,labels,label,data,color,unit,noteOpts){
   });
   // V38: attach monthly-note axis tooltip + store metadata for drill-down
   if(noteOpts&&noteOpts.did&&noteOpts.range){
-    chart._noteOpts={did:noteOpts.did,range:noteOpts.range,unit:unit,kpiKey:noteOpts.kpiKey||'',isOverlay:false,notedIdx:_notedIdxL};
+    chart._noteOpts={did:noteOpts.did,range:noteOpts.range,unit:unit,kpiKey:noteOpts.kpiKey||'',isOverlay:false};
     attachAxisNoteTooltip(chart,noteOpts.did,noteOpts.range);
   }
   return chart;
@@ -2425,11 +2436,11 @@ function openDrill(title, chartInstance, sub){
       : makeNoteLabel(nOpts.unit,null,nOpts.did,nOpts.range,nOpts.kpiKey||'');
     drillChart.options.plugins.tooltip.callbacks.label=labelFn;
     drillChart.options.plugins.tooltip.callbacks.afterBody=function(){return[];};
-    // V43: re-apply axis markers and label config
-    var _drillNoted=nOpts.notedIdx||buildNotedIndices(nOpts.did,nOpts.range);
-    applyNoteAxisConfig(drillChart.options,_drillNoted);
+    // V44: re-apply axis markers — dynamic plugins read NOTES_DATA at draw time
+    applyNoteAxisConfig(drillChart.options,nOpts.did,nOpts.range);
     drillChart.config.plugins=drillChart.config.plugins||[];
-    drillChart.config.plugins.push(buildNoteMarkerPlugin(_drillNoted));
+    drillChart.config.plugins=drillChart.config.plugins.filter(function(p){return p.id!=='noteAxisMarker_'+nOpts.did;});
+    drillChart.config.plugins.push(buildNoteMarkerPlugin(nOpts.did,nOpts.range));
     drillChart.update('none');
     attachAxisNoteTooltip(drillChart,nOpts.did,nOpts.range);
   }
