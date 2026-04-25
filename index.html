@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V44</title>
+<title>CMI · KPI Dashboard V45</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -1351,15 +1351,16 @@ function buildNotedIndices(did, range){
   return set;
 }
 
-// V44: Always apply — autoSkip=false unconditionally (16 months fits fine at font-size:9)
-// ticks.color is a CLOSURE that reads NOTES_DATA at render time, not at creation time
+// V45: Fix autoSkip path — Chart.js 4 reads from ticks.autoSkip not scale.autoSkip
+// Plugin removed — ticks.color closure handles all visual marking
 function applyNoteAxisConfig(opts, did, range){
-  opts.scales.x.autoSkip=false;
-  delete opts.scales.x.maxTicksLimit;
   opts.scales.x.ticks=opts.scales.x.ticks||{};
+  // FIX V45: correct property path for Chart.js 4
+  opts.scales.x.ticks.autoSkip=false;
+  delete opts.scales.x.ticks.maxTicksLimit;
   opts.scales.x.ticks.font={size:9};
   opts.scales.x.ticks.maxRotation=45;
-  // Dynamic color — closure captures did+range, reads NOTES_DATA at render time
+  // Dynamic color closure — reads NOTES_DATA at render time (works even if notes load late)
   opts.scales.x.ticks.color=function(ctx){
     var dk=range&&range.dkeys&&range.dkeys[ctx.index];
     if(!dk) return '#888';
@@ -1374,47 +1375,10 @@ function applyNoteAxisConfig(opts, did, range){
   };
 }
 
-// V44: Plugin reads NOTES_DATA dynamically in afterDraw — works even if notes load after chart
+// V45: Plugin no longer needed — ticks.color closure handles visual marking
+// Kept as no-op for compatibility with existing call sites
 function buildNoteMarkerPlugin(did, range){
-  return{
-    id:'noteAxisMarker_'+did,
-    afterDraw:function(chart){
-      var xScale=chart.scales&&chart.scales.x;
-      if(!xScale||!xScale.ticks||!xScale.ticks.length) return;
-      var ca=chart.chartArea;
-      var ctx=chart.ctx;
-      var hasAny=false;
-      ctx.save();
-      xScale.ticks.forEach(function(tick,i){
-        var dk=range&&range.dkeys&&range.dkeys[i];
-        if(!dk) return;
-        var dept=DEPTS.find(function(d){return d.id===did;});
-        var hasNote=!!getNote(did,dk.y,dk.m,'');
-        if(!hasNote&&dept){
-          for(var ki=0;ki<dept.kpis.length;ki++){
-            if(getNote(did,dk.y,dk.m,dept.kpis[ki].k)){hasNote=true;break;}
-          }
-        }
-        if(!hasNote) return;
-        hasAny=true;
-        var px=xScale.getPixelForTick(i);
-        if(px===undefined||isNaN(px)) return;
-        // Dot just below chartArea bottom (sits between chart and labels)
-        ctx.beginPath();
-        ctx.arc(px,ca.bottom+5,3,0,Math.PI*2);
-        ctx.fillStyle='#6366F1';
-        ctx.fill();
-        // Underline below the tick label (~26px below chartArea)
-        ctx.beginPath();
-        ctx.moveTo(px-14,ca.bottom+26);
-        ctx.lineTo(px+14,ca.bottom+26);
-        ctx.strokeStyle='#6366F1';
-        ctx.lineWidth=1.5;
-        ctx.stroke();
-      });
-      ctx.restore();
-    }
-  };
+  return {id:'noop_v45_'+did};
 }
 
 // ═══════════════════════════════════════════════
@@ -2436,11 +2400,8 @@ function openDrill(title, chartInstance, sub){
       : makeNoteLabel(nOpts.unit,null,nOpts.did,nOpts.range,nOpts.kpiKey||'');
     drillChart.options.plugins.tooltip.callbacks.label=labelFn;
     drillChart.options.plugins.tooltip.callbacks.afterBody=function(){return[];};
-    // V44: re-apply axis markers — dynamic plugins read NOTES_DATA at draw time
+    // V45: re-apply axis config (ticks.color handles color, no plugin needed)
     applyNoteAxisConfig(drillChart.options,nOpts.did,nOpts.range);
-    drillChart.config.plugins=drillChart.config.plugins||[];
-    drillChart.config.plugins=drillChart.config.plugins.filter(function(p){return p.id!=='noteAxisMarker_'+nOpts.did;});
-    drillChart.config.plugins.push(buildNoteMarkerPlugin(nOpts.did,nOpts.range));
     drillChart.update('none');
     attachAxisNoteTooltip(drillChart,nOpts.did,nOpts.range);
   }
