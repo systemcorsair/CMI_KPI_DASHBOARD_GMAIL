@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V48</title>
+<title>CMI · KPI Dashboard V49</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -25,6 +25,12 @@ button{cursor:pointer}
 .hidden{display:none!important}
 ::-webkit-scrollbar{width:5px}
 ::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:3px}
+
+/* ── V49: Top-N Category selector ── */
+.cat-n-wrap{padding:10px 14px!important;background:var(--bl-bg)!important;
+  border:1px solid var(--bl-lt)!important;border-radius:var(--r)}
+.cat-n-ctrl{display:flex;flex-direction:column;gap:3px}
+/* cat-n-btn reuses .drq styles — no extra CSS needed */
 
 /* post-logout Google button hover */
 #gsi-post-btn:hover{box-shadow:0 2px 8px rgba(0,0,0,.2)!important;border-color:#c6c6c6!important}
@@ -465,6 +471,10 @@ var GAS_MSG_URL = 'https://script.google.com/macros/s/AKfycbxnRoEXthlN_VXaEBdbmp
 // ═══════════════════════════════════════════════
 var DEMO_MODE = false;  // ← change to true for local testing
 var DEMO_CSV  = '';     // ← paste CSV content here when DEMO_MODE=true
+
+// V49: runtime override for top-N category display (per dept)
+// Populated when user clicks the Top-N pill buttons on a chart
+var CAT_N_OVERRIDE = {};  // e.g. {QA:1, CS:2}
 
 // ═══════════════════════════════════════════════
 // CONSTANTS
@@ -1348,6 +1358,15 @@ function renderDeptRight(){
   var col=el('d-col');
   if(dept.overlayCharts){
     // twoBar charts (full-width) come first; V48: top-N cat filter applied via resolveOverlayCharts
+    // V49: inject Top-N control bar for depts with category groups
+    if(dept.topCatN){
+      var ctrlD=document.createElement('div');
+      ctrlD.className='cc cc-span2 cat-n-wrap';
+      ctrlD.dataset.view='dept';
+      ctrlD.dataset.dept=dept.id;
+      ctrlD.innerHTML=buildCatNControlHTML(dept,range);
+      col.appendChild(ctrlD);
+    }
     var sortedOC = resolveOverlayCharts(dept, range).slice().sort(function(a,b){
       var aTwo = a.datasets.length===2&&a.datasets[0].type==='bar'&&a.datasets[1].type==='bar';
       var bTwo = b.datasets.length===2&&b.datasets[0].type==='bar'&&b.datasets[1].type==='bar';
@@ -1929,6 +1948,15 @@ function renderbodRight(id){
   body.innerHTML='<div class="charts-grid" id="b-col"></div>';
   var col=el('b-col');
   if(dept.overlayCharts){
+    // V49: inject Top-N control bar for depts with category groups
+    if(dept.topCatN){
+      var ctrlB=document.createElement('div');
+      ctrlB.className='cc cc-span2 cat-n-wrap';
+      ctrlB.dataset.view='bod';
+      ctrlB.dataset.dept=dept.id;
+      ctrlB.innerHTML=buildCatNControlHTML(dept,range);
+      col.appendChild(ctrlB);
+    }
     var sortedOC2 = resolveOverlayCharts(dept, range).slice().sort(function(a,b){
       var aTwo = a.datasets.length===2&&a.datasets[0].type==='bar'&&a.datasets[1].type==='bar';
       var bTwo = b.datasets.length===2&&b.datasets[0].type==='bar'&&b.datasets[1].type==='bar';
@@ -2005,8 +2033,65 @@ function resolveOverlayCharts(dept, range) {
   var cats = dept.overlayCharts.filter(function(oc) { return oc.topCat; });
   var rest = dept.overlayCharts.filter(function(oc) { return !oc.topCat; });
   if (!cats.length) return dept.overlayCharts;
-  var topCats = getTopNCatCharts(dept.id, range, cats, dept.topCatN);
+  // V49: use runtime override if set, else fall back to dept.topCatN
+  var effectiveN = (CAT_N_OVERRIDE[dept.id] != null)
+    ? CAT_N_OVERRIDE[dept.id]
+    : dept.topCatN;
+  var topCats = getTopNCatCharts(dept.id, range, cats, effectiveN);
   return rest.concat(topCats);
+}
+
+
+// ═══════════════════════════════════════════════
+// V49 — TOP-N CATEGORY SELECTOR CONTROL
+// Renders pill-buttons above the category charts
+// so users can toggle Top 1 / Top 2 / Top 3 …
+// ═══════════════════════════════════════════════
+function buildCatNControlHTML(dept, range) {
+  var cats      = dept.overlayCharts.filter(function(oc){ return oc.topCat; });
+  var totalCats = cats.length;
+  if(!totalCats) return '';
+  var currentN = (CAT_N_OVERRIDE[dept.id] != null)
+    ? CAT_N_OVERRIDE[dept.id]
+    : dept.topCatN;
+
+  // Calculate rank totals for display hint
+  var last12 = range.dkeys.slice(-12);
+  var scored = cats.map(function(oc){
+    var key = oc.datasets[0].key;
+    var tot = last12.reduce(function(s,dk){
+      return s+(getGSVal(dept.id,dk.y,dk.m,key)||0);
+    },0);
+    return {label:(QA_CAT_LABELS&&QA_CAT_LABELS[key])||oc.datasets[0].label||key,
+            total:Math.round(tot*10)/10};
+  });
+  scored.sort(function(a,b){return b.total-a.total;});
+
+  var pills='';
+  for(var i=1;i<=totalCats;i++){
+    pills+='<button class="drq cat-n-btn'+(i===currentN?' act':'')+'" data-n="'+i+'">'
+      +(i===totalCats?'All '+i:i===1?'Top 1':'Top '+i)
+      +'</button>';
+  }
+
+  var rankHint = scored.map(function(s,i){
+    return '<span style="font-size:10px;color:var(--'+(i<currentN?'bl':'hi')+')">'+
+      '#'+(i+1)+' '+s.label+
+      (i<currentN?' <b>'+s.total.toFixed(0)+'</b>':' <span style="text-decoration:line-through">'+s.total.toFixed(0)+'</span>')+
+      '</span>';
+  }).join('<span style="color:var(--bd2);margin:0 4px">·</span>');
+
+  return '<div class="cat-n-ctrl" data-dept="'+dept.id+'">'
+    +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+    +'<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;'
+    +'color:var(--mu)">Show categories:</span>'
+    +pills
+    +'<span style="font-size:10px;color:var(--hi);margin-left:4px">ranked by last 12M</span>'
+    +'</div>'
+    +'<div style="margin-top:5px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">'
+    +rankHint
+    +'</div>'
+    +'</div>';
 }
 
 // ═══════════════════════════════════════════════
@@ -2876,6 +2961,22 @@ document.addEventListener('DOMContentLoaded',function(){
     a.href=tmpCanvas.toDataURL('image/png');
     a.download=filename;
     a.click();
+  });
+
+  // ── V49: Top-N category pill click ──
+  document.body.addEventListener('click',function(e){
+    var btn=e.target.closest('.cat-n-btn');
+    if(!btn) return;
+    var n=parseInt(btn.dataset.n);
+    var wrap=btn.closest('[data-dept]');
+    if(!wrap) return;
+    // .cat-n-wrap has data-dept set directly
+    var did=wrap.dataset.dept;
+    if(!did) return;
+    CAT_N_OVERRIDE[did]=n;
+    // Re-render: dept view or BOD view
+    if(U&&(U.role==='bod'||U.role==='admin')) renderbodRight(did);
+    else renderDeptRight();
   });
 
   // Chart grid click → drill-down
