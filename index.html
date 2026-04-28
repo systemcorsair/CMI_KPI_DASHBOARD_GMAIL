@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V45</title>
+<title>CMI · KPI Dashboard V46</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -2375,7 +2375,12 @@ function openDrill(title, chartInstance, sub){
   if(!cfg.options.layout) cfg.options.layout={};
   cfg.options.layout.padding={top:20};
   if(cfg.options.scales){
-    if(cfg.options.scales.x) cfg.options.scales.x.ticks={font:{size:11}};
+    if(cfg.options.scales.x){
+      // V46 FIX: merge font size only — do NOT replace entire ticks object
+      // (replacing wipes ticks.color and other note-axis config set by applyNoteAxisConfig)
+      cfg.options.scales.x.ticks=cfg.options.scales.x.ticks||{};
+      cfg.options.scales.x.ticks.font={size:11};
+    }
     if(cfg.options.scales.y){
       cfg.options.scales.y.ticks={font:{size:11}};
       // Re-apply afterDataLimits (lost by JSON.parse — functions stripped)
@@ -2391,19 +2396,24 @@ function openDrill(title, chartInstance, sub){
   if(cfg.options.plugins&&cfg.options.plugins.datalabels){
     cfg.options.plugins.datalabels.font={size:11,weight:'700'};
   }
-  drillChart=new Chart(el('drill-canvas'),cfg);
-  // V38: re-apply note tooltips; V43: re-apply axis marker plugin
+  // V46 FIX: re-apply note tooltip callbacks + axis color BEFORE creating the drill chart
+  // (applyNoteAxisConfig sets ticks.color which is a function — must be in cfg before Chart() call)
   var nOpts=chartInstance._noteOpts;
-  if(nOpts&&nOpts.did&&nOpts.range){
-    applyNoteAxisConfig(cfg.options,nOpts.did,nOpts.range); // trước khi tạo chart
-  }
-  drillChart=new Chart(el('drill-canvas'),cfg);
   if(nOpts&&nOpts.did&&nOpts.range){
     var labelFn=nOpts.isOverlay
       ? makeNoteLabel(nOpts.unit,nOpts.oc,nOpts.did,nOpts.range)
       : makeNoteLabel(nOpts.unit,null,nOpts.did,nOpts.range,nOpts.kpiKey||'');
-    drillChart.options.plugins.tooltip.callbacks.label=labelFn;
-    drillChart.options.plugins.tooltip.callbacks.afterBody=function(){return[];};
+    if(!cfg.options.plugins) cfg.options.plugins={};
+    if(!cfg.options.plugins.tooltip) cfg.options.plugins.tooltip={callbacks:{}};
+    if(!cfg.options.plugins.tooltip.callbacks) cfg.options.plugins.tooltip.callbacks={};
+    cfg.options.plugins.tooltip.callbacks.label=labelFn;
+    cfg.options.plugins.tooltip.callbacks.afterBody=function(){return[];};
+    // Apply axis color function to cfg BEFORE chart creation
+    applyNoteAxisConfig(cfg.options,nOpts.did,nOpts.range);
+  }
+  drillChart=new Chart(el('drill-canvas'),cfg);
+  // V46: attach axis note tooltip AFTER chart is created (needs canvas reference)
+  if(nOpts&&nOpts.did&&nOpts.range){
     attachAxisNoteTooltip(drillChart,nOpts.did,nOpts.range);
   }
 }
