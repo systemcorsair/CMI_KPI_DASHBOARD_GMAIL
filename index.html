@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V46</title>
+<title>CMI · KPI Dashboard V47</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -457,6 +457,15 @@ var SCRIPT_URL  = 'https://script.google.com/macros/s/AKfycbxnRoEXthlN_VXaEBdbmp
 var GAS_PW_URL  = 'https://script.google.com/macros/s/AKfycbxnRoEXthlN_VXaEBdbmpwAevMR-PV_Abml2mNhC4R4CVcNYyLGM4dOsWMYs2lTNXJJ0A/exec';
 var GAS_MSG_URL = 'https://script.google.com/macros/s/AKfycbxnRoEXthlN_VXaEBdbmpwAevMR-PV_Abml2mNhC4R4CVcNYyLGM4dOsWMYs2lTNXJJ0A/exec';
 
+
+// ═══════════════════════════════════════════════
+// DEMO MODE V47 — set true to run offline
+// fetchSheetData() loads DEMO_CSV instead of GSheet
+// Switch back to false before deploying live.
+// ═══════════════════════════════════════════════
+var DEMO_MODE = false;  // ← change to true for local testing
+var DEMO_CSV  = '';     // ← paste CSV content here when DEMO_MODE=true
+
 // ═══════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════
@@ -469,241 +478,262 @@ var YRS = [2024, 2025, 2026, 2027];
 // DEPT DEFINITIONS  — V13
 // ═══════════════════════════════════════════════
 var DEPTS = [
+  // ── PROD ──
   {id:'PROD', name:'Production', abbr:'PROD', color:'#378ADD', ini:'RK', mgr:'Rudy Knoesen',
    purpose:'Deliver boats on time with controlled labour.',
    kpis:[
-     {k:'Schedule_Adherence_pct',   l:'Schedule Adherence',    u:'%',   t:'p', better:'up'},
-     {k:'Labour_Hours_vs_Plan_pct', l:'Labour Hours vs Plan',  u:'%',   t:'p', better:'up'},
-     {k:'Rework_Hours_pct',         l:'Rework Hours',          u:'%',   t:'p', better:'down'},
-     {k:'Work_Order_Changes',       l:'Work Order Changes',    u:'No.', t:'i', better:'down'},
-     {k:'Boats_Completed',          l:'Boats Completed',       u:'No.', t:'i', better:'up'},
+     {k:'Schedule_Adherence_pct',     l:'Schedule Adherence',         u:'%',  t:'p', better:'up'},
+     {k:'Labour_Hours_vs_Plan_pct',   l:'Labour Hours vs Plan',       u:'%',  t:'p', better:'up'},
+     {k:'Boats_Completed',            l:'Boats Completed',            u:'No.',t:'i', better:'up'},
+     {k:'Stage_Gate_Compliance_pct',  l:'Stage Gate Compliance',      u:'%',  t:'p', better:'up'},
+     {k:'Defects_per_Boat_SW1160',    l:'Defects/Boat SW1160',        u:'No.',t:'p', better:'down'},
+     {k:'Defects_per_Boat_SW1270',    l:'Defects/Boat SW1270',        u:'No.',t:'p', better:'down'},
+     {k:'Defects_per_Boat_SW1370',    l:'Defects/Boat SW1370',        u:'No.',t:'p', better:'down'},
+     {k:'Defects_per_Boat_SW1600',    l:'Defects/Boat SW1600',        u:'No.',t:'p', better:'down'},
+     {k:'Defects_per_Boat_C760',      l:'Defects/Boat C760',          u:'No.',t:'p', better:'down'},
+     {k:'Defects_per_Boat_C880',      l:'Defects/Boat C880',          u:'No.',t:'p', better:'down'},
+     {k:'Defects_per_Boat_C970',      l:'Defects/Boat C970',          u:'No.',t:'p', better:'down'},
    ],
    overlayCharts:[
-     {title:'Schedule Adherence %',           unit:'%',    datasets:[{key:'Schedule_Adherence_pct',   label:'Schedule Adherence %', color:'#378ADD',type:'line'}]},
-     {title:'Labour Hours vs Plan %',          unit:'%',    datasets:[{key:'Labour_Hours_vs_Plan_pct', label:'Labour vs Plan %',     color:'#60A5FA',type:'line'}]},
-     {title:'Rework Hours %',                  unit:'%',    datasets:[{key:'Rework_Hours_pct',         label:'Rework %',             color:'#F87171',type:'line'}]},
-     {title:'Work Order Changes',              unit:'No.',  datasets:[{key:'Work_Order_Changes',       label:'WO Changes',           color:'#FB923C',type:'bar'}]},
-     {title:'Boats Completed',                 unit:'No.',  datasets:[{key:'Boats_Completed',          label:'Boats',                color:'#1D4ED8',type:'bar'}]},
+     {title:'Schedule Adherence %',        unit:'%',   datasets:[{key:'Schedule_Adherence_pct',    label:'Schedule %',      color:'#378ADD',type:'line'}]},
+     {title:'Labour Hours vs Plan %',       unit:'%',   datasets:[{key:'Labour_Hours_vs_Plan_pct',  label:'Labour vs Plan %',color:'#60A5FA',type:'line'}]},
+     {title:'Boats Completed',              unit:'No.', datasets:[{key:'Boats_Completed',           label:'Boats',           color:'#1D4ED8',type:'bar'}]},
+     {title:'Stage Gate Compliance %',      unit:'%',   datasets:[{key:'Stage_Gate_Compliance_pct', label:'Stage Gate %',    color:'#0EA5E9',type:'line'}]},
+     {title:'Defects per Boat - SW1160',    unit:'No.', datasets:[{key:'Defects_per_Boat_SW1160',   label:'SW1160',          color:'#F97316',type:'bar'}]},
+     {title:'Defects per Boat - SW1270',    unit:'No.', datasets:[{key:'Defects_per_Boat_SW1270',   label:'SW1270',          color:'#EF4444',type:'bar'}]},
+     {title:'Defects per Boat - SW1370',    unit:'No.', datasets:[{key:'Defects_per_Boat_SW1370',   label:'SW1370',          color:'#DC2626',type:'bar'}]},
+     {title:'Defects per Boat - SW1600',    unit:'No.', datasets:[{key:'Defects_per_Boat_SW1600',   label:'SW1600',          color:'#B45309',type:'bar'}]},
+     {title:'Defects per Boat - C760',      unit:'No.', datasets:[{key:'Defects_per_Boat_C760',     label:'C760',            color:'#7C3AED',type:'bar'}]},
+     {title:'Defects per Boat - C880',      unit:'No.', datasets:[{key:'Defects_per_Boat_C880',     label:'C880',            color:'#6D28D9',type:'bar'}]},
+     {title:'Defects per Boat - C970',      unit:'No.', datasets:[{key:'Defects_per_Boat_C970',     label:'C970',            color:'#4C1D95',type:'bar'}]},
    ]},
 
+  // ── QA ──
   {id:'QA', name:'Quality Assurance', abbr:'QA', color:'#D4537E', ini:'DA', mgr:'Mr Duy Anh',
    purpose:'Ensure first-time quality.',
    kpis:[
-     {k:'First_Time_Pass_pct',  l:'First Time Pass',    u:'%',   t:'p', better:'up'},
-     {k:'QA_Defects_Logged',    l:'QA Defects Logged',  u:'No.', t:'i', better:'down'},
-     {k:'Defects_Severity_A',   l:'Defects Severity A', u:'No.', t:'i', better:'down'},
-     {k:'Defects_Severity_B',   l:'Defects Severity B', u:'No.', t:'i', better:'down'},
-     {k:'Defects_Severity_C',   l:'Defects Severity C', u:'No.', t:'i', better:'down'},
-     {k:'Avg_Closeout_Days_QA', l:'Avg Close-out Time', u:'Days',t:'p', better:'down'},
+     {k:'First_Time_Pass_pct',              l:'First Time Pass',              u:'%',   t:'p', better:'up'},
+     {k:'Defects_Severity_A',               l:'Defects Severity A',           u:'No.', t:'i', better:'down'},
+     {k:'Defects_Severity_B',               l:'Defects Severity B',           u:'No.', t:'i', better:'down'},
+     {k:'Defects_Severity_C',               l:'Defects Severity C',           u:'No.', t:'i', better:'down'},
+     {k:'Avg_Closeout_Days_QA',             l:'Avg Close-out Time',           u:'Days',t:'p', better:'down'},
+     {k:'Close_Out_Data_Completeness_pct',  l:'Close-Out Data Completeness',  u:'%',   t:'p', better:'up'},
+     {k:'QA_RepeatNew_Cat1_pct',            l:'Repeat/New - Category 1',      u:'%',   t:'p', better:'down'},
+     {k:'QA_RepeatNew_Cat2_pct',            l:'Repeat/New - Category 2',      u:'%',   t:'p', better:'down'},
+     {k:'QA_RepeatNew_Cat3_pct',            l:'Repeat/New - Category 3',      u:'%',   t:'p', better:'down'},
    ],
    overlayCharts:[
-     {title:'First Time Pass %',         unit:'%',   datasets:[{key:'First_Time_Pass_pct', label:'FTP %',          color:'#D4537E',type:'line'}]},
-     {title:'QA Defects Logged',         unit:'No.', datasets:[{key:'QA_Defects_Logged',   label:'Defects Logged', color:'#F43F5E',type:'bar'}]},
-     {title:'Defects by Severity A/B/C', unit:'No.', datasets:[
-       {key:'Defects_Severity_A', label:'Severity A', color:'#DC2626', type:'bar'},
-       {key:'Defects_Severity_B', label:'Severity B', color:'#F97316', type:'bar'},
-       {key:'Defects_Severity_C', label:'Severity C', color:'#FBBF24', type:'bar'},
+     {title:'First Time Pass %',             unit:'%',    datasets:[{key:'First_Time_Pass_pct',             label:'FTP %',          color:'#D4537E',type:'line'}]},
+     {title:'Defects by Severity A/B/C',     unit:'No.',  datasets:[
+       {key:'Defects_Severity_A', label:'Severity A', color:'#DC2626',type:'bar'},
+       {key:'Defects_Severity_B', label:'Severity B', color:'#F97316',type:'bar'},
+       {key:'Defects_Severity_C', label:'Severity C', color:'#FBBF24',type:'bar'},
      ]},
-     {title:'Avg Close-out Time',        unit:'Days',datasets:[{key:'Avg_Closeout_Days_QA', label:'Avg Days', color:'#BE185D',type:'line'}]},
+     {title:'Avg Close-out Time',            unit:'Days', datasets:[{key:'Avg_Closeout_Days_QA',            label:'Avg Days',        color:'#BE185D',type:'line'}]},
+     {title:'Close-Out Data Completeness %', unit:'%',    datasets:[{key:'Close_Out_Data_Completeness_pct', label:'Completeness %',  color:'#A21CAF',type:'line'}]},
+     {title:'Repeat/New - Category 1',       unit:'%',    datasets:[{key:'QA_RepeatNew_Cat1_pct',           label:'Cat1 Repeat %',   color:'#F43F5E',type:'bar'}]},
+     {title:'Repeat/New - Category 2',       unit:'%',    datasets:[{key:'QA_RepeatNew_Cat2_pct',           label:'Cat2 Repeat %',   color:'#E11D48',type:'bar'}]},
+     {title:'Repeat/New - Category 3',       unit:'%',    datasets:[{key:'QA_RepeatNew_Cat3_pct',           label:'Cat3 Repeat %',   color:'#BE123C',type:'bar'}]},
    ]},
 
+  // ── DESIGN ──
   {id:'DESIGN', name:'Design & Technical', abbr:'D&T', color:'#8B5CF6', ini:'JA', mgr:'James',
    purpose:'Stable design and BOM.',
    kpis:[
-     {k:'BOM_Errors_Identified',  l:'BOM Errors Identified', u:'No.', t:'i', better:'down'},
-     {k:'Production_RFIs',        l:'Production RFIs',       u:'No.', t:'i', better:'down'},
-     {k:'Late_Design_Changes',    l:'Late Design Changes',   u:'No.', t:'i', better:'down'},
+     {k:'BOM_Errors_Identified',     l:'BOM Errors Identified',         u:'No.',t:'i', better:'down'},
+     {k:'Production_RFIs',           l:'Production RFIs',               u:'No.',t:'i', better:'down'},
+     {k:'Repeat_Design_Defects_pct', l:'Repeat Design-Related Defects', u:'%',  t:'p', better:'down'},
    ],
    overlayCharts:[
-     {title:'BOM Errors Identified',              unit:'No.', datasets:[{key:'BOM_Errors_Identified', label:'BOM Errors',    color:'#8B5CF6',type:'bar'}]},
-     {title:'Production RFIs',                    unit:'No.', datasets:[{key:'Production_RFIs',       label:'RFIs',          color:'#A78BFA',type:'bar'}]},
-     {title:'Late Design Changes',                unit:'No.', datasets:[{key:'Late_Design_Changes',   label:'Late Changes',  color:'#6D28D9',type:'bar'}]},
+     {title:'BOM Errors Identified',           unit:'No.', datasets:[{key:'BOM_Errors_Identified',     label:'BOM Errors',       color:'#8B5CF6',type:'bar'}]},
+     {title:'Production RFIs',                 unit:'No.', datasets:[{key:'Production_RFIs',           label:'RFIs',             color:'#A78BFA',type:'bar'}]},
+     {title:'Repeat Design-Related Defects %', unit:'%',   datasets:[{key:'Repeat_Design_Defects_pct', label:'Repeat Defects %', color:'#6D28D9',type:'line'}]},
    ]},
 
+  // ── PD ──
   {id:'PD', name:'Project Development', abbr:'PD', color:'#14B8A6', ini:'PL', mgr:'Project Lead',
    purpose:'Controlled implementation of change.',
    kpis:[
-     {k:'Active_Projects',         l:'Active Projects',        u:'No.', t:'i', better:'up'},
-     {k:'Projects_OnTrack_pct',    l:'Projects On-Track',      u:'%',   t:'p', better:'up'},
-     {k:'Design_Changes_Released', l:'Design Changes Released',u:'No.', t:'i', better:'up'},
+     {k:'Active_Projects',         l:'Active Projects',         u:'No.',t:'i', better:'up'},
+     {k:'Projects_OnTrack_pct',    l:'Projects On-Track',       u:'%',  t:'p', better:'up'},
+     {k:'Design_Changes_Released', l:'Design Changes Released', u:'No.',t:'i', better:'up'},
    ],
    overlayCharts:[
-     {title:'Active Projects',         unit:'No.', datasets:[{key:'Active_Projects',         label:'Active Projects',  color:'#14B8A6',type:'bar'}]},
-     {title:'Projects On-Track %',     unit:'%',   datasets:[{key:'Projects_OnTrack_pct',    label:'On-Track %',       color:'#0D9488',type:'line'}]},
-     {title:'Design Changes Released', unit:'No.', datasets:[{key:'Design_Changes_Released', label:'Changes Released', color:'#5EEAD4',type:'bar'}]},
+     {title:'Active Projects',         unit:'No.', datasets:[{key:'Active_Projects',         label:'Active Projects', color:'#14B8A6',type:'bar'}]},
+     {title:'Projects On-Track %',     unit:'%',   datasets:[{key:'Projects_OnTrack_pct',    label:'On-Track %',      color:'#0D9488',type:'line'}]},
+     {title:'Design Changes Released', unit:'No.', datasets:[{key:'Design_Changes_Released', label:'Changes Released',color:'#5EEAD4',type:'bar'}]},
    ]},
 
+  // ── SC ──
   {id:'SC', name:'Supply Chain', abbr:'SCM', color:'#D85A30', ini:'ML', mgr:'Mr Loc',
    purpose:'Material availability to production.',
    kpis:[
-     {k:'OTIF_to_Production_pct',     l:'OTIF to Production',               u:'%',  t:'p', better:'up'},
-     {k:'Material_Shortages',         l:'Material Shortages Impact Prod.',   u:'No.',t:'i', better:'down'},
-     {k:'Expedited_Freight_Cost_USD', l:'Expedited Freight Cost',            u:'USD',t:'c', better:'down'},
+     {k:'OTIF_to_Production_pct',     l:'OTIF to Production',            u:'%',  t:'p', better:'up'},
+     {k:'Material_Shortages',         l:'Material Shortages Imp. Prod.', u:'No.',t:'i', better:'down'},
+     {k:'Expedited_Freight_Cost_USD', l:'Expedited Freight Cost',        u:'USD',t:'c', better:'down'},
+     {k:'Material_Defect_Rate_pct',   l:'Material Defect Rate',          u:'%',  t:'p', better:'down'},
    ],
    overlayCharts:[
-     {title:'OTIF to Production %',                   unit:'%',   datasets:[{key:'OTIF_to_Production_pct',     label:'OTIF %',        color:'#D85A30',type:'line'}]},
-     {title:'Material Shortages Impacting Production', unit:'No.', datasets:[{key:'Material_Shortages',         label:'Shortages',     color:'#F97316',type:'bar'}]},
-     {title:'Expedited Freight Cost',                  unit:'USD', datasets:[{key:'Expedited_Freight_Cost_USD', label:'Freight Cost',  color:'#EA580C',type:'bar'}]},
+     {title:'OTIF to Production %',               unit:'%',   datasets:[{key:'OTIF_to_Production_pct',     label:'OTIF %',        color:'#D85A30',type:'line'}]},
+     {title:'Material Shortages Imp. Production', unit:'No.', datasets:[{key:'Material_Shortages',         label:'Shortages',     color:'#F97316',type:'bar'}]},
+     {title:'Expedited Freight Cost',             unit:'USD', datasets:[{key:'Expedited_Freight_Cost_USD', label:'Freight Cost',  color:'#EA580C',type:'bar'}]},
+     {title:'Material Defect Rate %',             unit:'%',   datasets:[{key:'Material_Defect_Rate_pct',   label:'Defect Rate %', color:'#B45309',type:'line'}]},
    ]},
 
-  {id:'CID', name:'CID', abbr:'CID', color:'#6366F1', ini:'CL', mgr:'CID Lead',
+  // ── CID ──
+  {id:'CID', name:'CID', abbr:'CID', color:'#6366F1', ini:'CL', mgr:'Rudy/CID Lead',
    purpose:'Drive measurable improvement.',
    kpis:[
-     {k:'CID_Actions_Open',      l:'CID Actions Open',    u:'No.',  t:'i', better:'down'},
-     {k:'CID_Actions_Closed',    l:'CID Actions Closed',  u:'No.',  t:'i', better:'up'},
-     {k:'CID_Avg_Closeout_Days', l:'Avg Close-out Time',  u:'Days', t:'p', better:'down'},
+     {k:'CID_Actions_Open',               l:'CID Actions Open',           u:'No.',t:'i', better:'down'},
+     {k:'CID_Actions_Closed',             l:'CID Actions Closed',         u:'No.',t:'i', better:'up'},
+     {k:'Root_Cause_Resolution_Rate_pct', l:'Root Cause Resolution Rate', u:'%',  t:'p', better:'up'},
    ],
    overlayCharts:[
-     {title:'CID Actions Open vs Closed', unit:'No.', datasets:[
-       {key:'CID_Actions_Open',   label:'Open',   color:'#A5B4FC', type:'bar'},
-       {key:'CID_Actions_Closed', label:'Closed', color:'#6366F1', type:'bar'},
+     {title:'CID Actions Open vs Closed',   unit:'No.', datasets:[
+       {key:'CID_Actions_Open',   label:'Open',   color:'#A5B4FC',type:'bar'},
+       {key:'CID_Actions_Closed', label:'Closed', color:'#6366F1',type:'bar'},
      ]},
-     {title:'Avg Close-out Time', unit:'Days', datasets:[{key:'CID_Avg_Closeout_Days', label:'Avg Days', color:'#4F46E5',type:'line'}]},
+     {title:'Root Cause Resolution Rate %', unit:'%', datasets:[{key:'Root_Cause_Resolution_Rate_pct', label:'Resolution %', color:'#4F46E5',type:'line'}]},
    ]},
 
+  // ── TL ──
   {id:'TL', name:'Thailand Handover', abbr:'TH', color:'#F97316', ini:'PH', mgr:'Phil Harper',
    purpose:'Clean delivery and handover.',
    kpis:[
-     {k:'Handovers_Completed',        l:'Handovers Completed',          u:'No.',t:'i', better:'up'},
-     {k:'Delivery_to_Planned_pct',    l:'Delivery to Planned Date',     u:'%',  t:'p', better:'up'},
-     {k:'Defects_at_Handover',        l:'Defects at Handover',          u:'No.',t:'i', better:'down'},
-     {k:'Outstanding_Issues_Delivery',l:'Outstanding Issues at Delivery',u:'No.',t:'i', better:'down'},
+     {k:'Handovers_Completed',     l:'Handovers Completed',            u:'No.',t:'i', better:'up'},
+     {k:'Delivery_to_Planned_pct', l:'Delivery to Planned Date',       u:'%',  t:'p', better:'up'},
+     {k:'TH_RepeatNew_Cat_pct',    l:'Repeat/New Defects by Category', u:'%',  t:'p', better:'down'},
    ],
    overlayCharts:[
-     {title:'Handovers Completed',                    unit:'No.', datasets:[{key:'Handovers_Completed',         label:'Handovers',          color:'#F97316',type:'bar'}]},
-     {title:'Delivery to Planned Date %',              unit:'%',   datasets:[{key:'Delivery_to_Planned_pct',     label:'On-Time %',          color:'#FB923C',type:'line'}]},
-     {title:'Defects at Handover & Outstanding Issues',unit:'No.', datasets:[
-       {key:'Defects_at_Handover',        label:'Defects',            color:'#EF4444', type:'bar'},
-       {key:'Outstanding_Issues_Delivery',label:'Outstanding Issues', color:'#F59E0B', type:'bar'},
-     ]},
+     {title:'Handovers Completed',             unit:'No.', datasets:[{key:'Handovers_Completed',     label:'Handovers',  color:'#F97316',type:'bar'}]},
+     {title:'Delivery to Planned Date %',       unit:'%',   datasets:[{key:'Delivery_to_Planned_pct', label:'On-Time %',  color:'#FB923C',type:'line'}]},
+     {title:'Repeat/New Defects by Category %', unit:'%',   datasets:[{key:'TH_RepeatNew_Cat_pct',    label:'Repeat %',   color:'#EF4444',type:'bar'}]},
    ]},
 
+  // ── SALES ──
   {id:'SALES', name:'Sales', abbr:'SALES', color:'#1D9E75', ini:'MK', mgr:'Mike',
    purpose:'Order intake and pipeline visibility.',
    kpis:[
-     {k:'Orders_Booked_USD',       l:'Orders Booked',            u:'USD', t:'c', better:'up'},
-     {k:'Units_Sold',              l:'Units Sold',               u:'No.', t:'i', better:'up'},
-     {k:'Order_Changes_Post',      l:'Order Changes Post-Contract',u:'No.',t:'i', better:'down'},
-     {k:'Sales_Pipeline_USD',      l:'Sales Pipeline',           u:'USD', t:'c', better:'up'},
+     {k:'Orders_Booked_USD',  l:'Orders Booked', u:'USD',t:'c', better:'up'},
+     {k:'Units_Sold',         l:'Units Sold',    u:'No.',t:'i', better:'up'},
+     {k:'Sales_Pipeline_USD', l:'Sales Pipeline',u:'USD',t:'c', better:'up'},
    ],
    overlayCharts:[
      {title:'Orders Booked vs Pipeline', unit:'USD', datasets:[
-       {key:'Sales_Pipeline_USD',  label:'Pipeline',      color:'#6EE7B7', type:'bar'},
-       {key:'Orders_Booked_USD',   label:'Orders Booked', color:'#1D9E75', type:'bar'},
+       {key:'Sales_Pipeline_USD', label:'Pipeline',     color:'#6EE7B7',type:'bar'},
+       {key:'Orders_Booked_USD',  label:'Orders Booked',color:'#1D9E75',type:'bar'},
      ]},
-     {title:'Units Sold',                unit:'No.', datasets:[{key:'Units_Sold',         label:'Units',          color:'#34D399',type:'bar'}]},
-     {title:'Order Changes Post-Contract',unit:'No.', datasets:[{key:'Order_Changes_Post', label:'Order Changes',  color:'#F59E0B',type:'bar'}]},
+     {title:'Units Sold', unit:'No.', datasets:[{key:'Units_Sold', label:'Units', color:'#34D399',type:'bar'}]},
    ]},
 
+  // ── MKTG ──
   {id:'MKTG', name:'Marketing', abbr:'MKTG', color:'#EC4899', ini:'NP', mgr:'Nhi Pham',
    purpose:'Lead generation effectiveness.',
    kpis:[
-     {k:'Qualified_Leads',        l:'Qualified Leads',    u:'No.', t:'i', better:'up'},
-     {k:'Cost_Per_Lead_USD',      l:'Cost per Lead',      u:'USD', t:'c', better:'down'},
-     {k:'Conversion_Rate_pct',    l:'Conversion Rate',    u:'%',   t:'p', better:'up'},
-     {k:'Campaigns_Active',       l:'Campaigns Active',   u:'No.', t:'i', better:'up'},
+     {k:'Qualified_Leads',     l:'Qualified Leads', u:'No.',t:'i', better:'up'},
+     {k:'Cost_Per_Lead_USD',   l:'Cost per Lead',   u:'USD',t:'c', better:'down'},
+     {k:'Conversion_Rate_pct', l:'Conversion Rate', u:'%',  t:'p', better:'up'},
    ],
    overlayCharts:[
      {title:'Qualified Leads',   unit:'No.', datasets:[{key:'Qualified_Leads',     label:'Leads',       color:'#EC4899',type:'bar'}]},
      {title:'Cost per Lead',     unit:'USD', datasets:[{key:'Cost_Per_Lead_USD',   label:'Cost/Lead',   color:'#F472B6',type:'line'}]},
      {title:'Conversion Rate %', unit:'%',   datasets:[{key:'Conversion_Rate_pct', label:'Conversion %',color:'#BE185D',type:'line'}]},
-	 {title:'Campaigns Active',  unit:'No.', datasets:[{key:'Campaigns_Active',    label:'Campaigns',   color:'#DB2777',type:'bar'}]},
    ]},
 
+  // ── CS ──
   {id:'CS', name:'Customer Service', abbr:'CS', color:'#0891B2', ini:'VN', mgr:'Van Nguyen',
    purpose:'Warranty control and resolution.',
    kpis:[
-     {k:'Warranty_Claims_Open',  l:'Warranty Claims Open',  u:'No.', t:'i', better:'down'},
-     {k:'New_Claims',            l:'New Claims',            u:'No.', t:'i', better:'down'},
-     {k:'Avg_Closeout_Days_CS',  l:'Avg Close-out Time',   u:'Days',t:'p', better:'down'},
-     {k:'Repeat_Issues',         l:'Repeat Issues',         u:'No.', t:'i', better:'down'},
+     {k:'Warranty_Claims_Open', l:'Warranty Claims Open',           u:'No.', t:'i', better:'down'},
+     {k:'New_Claims',           l:'New Claims',                     u:'No.', t:'i', better:'down'},
+     {k:'Avg_Closeout_Days_CS', l:'Avg Close-out Time',             u:'Days',t:'p', better:'down'},
+     {k:'CS_RepeatNew_Cat_pct', l:'Repeat Warranty Issues by Cat.', u:'%',   t:'p', better:'down'},
    ],
    overlayCharts:[
      {title:'Claims Open vs New', unit:'No.', datasets:[
-       {key:'Warranty_Claims_Open', label:'Open',      color:'#F87171', type:'bar'},
-       {key:'New_Claims',           label:'New Claims',color:'#0891B2', type:'bar'},
+       {key:'Warranty_Claims_Open', label:'Open',       color:'#F87171',type:'bar'},
+       {key:'New_Claims',           label:'New Claims', color:'#0891B2',type:'bar'},
      ]},
-     {title:'Avg Close-out Time', unit:'Days', datasets:[{key:'Avg_Closeout_Days_CS', label:'Avg Days',     color:'#0E7490',type:'line'}]},
-     {title:'Repeat Issues',      unit:'No.',  datasets:[{key:'Repeat_Issues',         label:'Repeat Issues',color:'#EF4444',type:'bar'}]},
+     {title:'Avg Close-out Time',               unit:'Days', datasets:[{key:'Avg_Closeout_Days_CS',  label:'Avg Days', color:'#0E7490',type:'line'}]},
+     {title:'Repeat Warranty Issues by Cat. %', unit:'%',    datasets:[{key:'CS_RepeatNew_Cat_pct',  label:'Repeat %', color:'#EF4444',type:'bar'}]},
    ]},
 
+  // ── FIN ──
   {id:'FIN', name:'Finance', abbr:'FIN', color:'#EF9F27', ini:'MD', mgr:'Mr Dung',
    purpose:'Cash and margin control.',
    kpis:[
-     {k:'Operating_CF_USD',       l:'Operating Cash Flow',    u:'USD', t:'c', better:'up'},
-     {k:'Gross_Margin_pct',       l:'Gross Margin',           u:'%',   t:'p', better:'up'},
-     {k:'Aged_Receivables_USD',   l:'Aged Receivables >60d',  u:'USD', t:'c', better:'down'},
-     {k:'Inventory_Value_USD',    l:'Inventory Value',        u:'USD', t:'c', better:'down'},
+     {k:'Operating_CF_USD',     l:'Operating Cash Flow',   u:'USD',t:'c', better:'up'},
+     {k:'Gross_Margin_pct',     l:'Gross Margin',          u:'%',  t:'p', better:'up'},
+     {k:'Aged_Receivables_USD', l:'Aged Receivables >60d', u:'USD',t:'c', better:'down'},
+     {k:'Inventory_Value_USD',  l:'Inventory Value',       u:'USD',t:'c', better:'down'},
    ],
    overlayCharts:[
      {title:'Operating Cash Flow', unit:'USD', datasets:[{key:'Operating_CF_USD',     label:'Cash Flow',     color:'#EF9F27',type:'bar'}]},
      {title:'Gross Margin %',      unit:'%',   datasets:[{key:'Gross_Margin_pct',     label:'Gross Margin %',color:'#F59E0B',type:'line'}]},
      {title:'Aged Receivables >60d & Inventory', unit:'USD', datasets:[
-       {key:'Aged_Receivables_USD', label:'AR >60d',    color:'#EF4444', type:'bar'},
-       {key:'Inventory_Value_USD',  label:'Inventory',  color:'#FCD34D', type:'bar'},
+       {key:'Aged_Receivables_USD', label:'AR >60d',   color:'#EF4444',type:'bar'},
+       {key:'Inventory_Value_USD',  label:'Inventory', color:'#FCD34D',type:'bar'},
      ]},
    ]},
 
+  // ── HR ──
   {id:'HR', name:'Human Resources', abbr:'HR', color:'#7F77DD', ini:'MC', mgr:'Ms Chau',
    purpose:'Workforce stability.',
    kpis:[
-     {k:'Headcount_vs_Plan',  l:'Headcount vs Plan',  u:'No.', t:'i', better:'up'},
-     {k:'Staff_Turnover_pct', l:'Staff Turnover',     u:'%',   t:'p', better:'down'},
-     {k:'Absenteeism_pct',    l:'Absenteeism',        u:'%',   t:'p', better:'down'},
-     {k:'Overtime_pct',       l:'Overtime',           u:'%',   t:'p', better:'down'},
+     {k:'Headcount_vs_Plan',  l:'Headcount vs Plan', u:'No.',t:'i', better:'up'},
+     {k:'Staff_Turnover_pct', l:'Staff Turnover',    u:'%',  t:'p', better:'down'},
+     {k:'Absenteeism_pct',    l:'Absenteeism',       u:'%',  t:'p', better:'down'},
    ],
    overlayCharts:[
-     {title:'Headcount vs Plan', unit:'No.', datasets:[{key:'Headcount_vs_Plan',  label:'Headcount', color:'#7F77DD',type:'bar'}]},
+     {title:'Headcount vs Plan', unit:'No.', datasets:[{key:'Headcount_vs_Plan',  label:'Headcount',     color:'#7F77DD',type:'bar'}]},
      {title:'Staff Turnover & Absenteeism %', unit:'%', datasets:[
-       {key:'Staff_Turnover_pct', label:'Turnover %',    color:'#F87171', type:'line'},
-       {key:'Absenteeism_pct',    label:'Absenteeism %', color:'#FB923C', type:'line'},
+       {key:'Staff_Turnover_pct', label:'Turnover %',    color:'#F87171',type:'line'},
+       {key:'Absenteeism_pct',    label:'Absenteeism %', color:'#FB923C',type:'line'},
      ]},
-     {title:'Overtime %', unit:'%', datasets:[{key:'Overtime_pct', label:'Overtime %', color:'#A78BFA',type:'line'}]},
    ]},
 
+  // ── HSE ──
   {id:'HSE', name:'HSE', abbr:'HSE', color:'#16A34A', ini:'MP', mgr:'Mr Phong',
    purpose:'Safe operations and compliance.',
    kpis:[
-     {k:'TRIR',                   l:'TRIR',                    u:'rate',t:'p', better:'down'},
-     {k:'LTIFR',                  l:'LTIFR',                   u:'rate',t:'p', better:'down'},
-     {k:'Near_Miss_Reports',      l:'Near Miss Reports',       u:'No.', t:'i', better:'down'},
-     {k:'High_Risk_Work_Comp_pct',l:'High-Risk Work Compliance',u:'%',  t:'p', better:'up'},
+     {k:'TRIR',                   l:'TRIR',                       u:'rate',t:'p', better:'down'},
+     {k:'LTIFR',                  l:'LTIFR',                      u:'rate',t:'p', better:'down'},
+     {k:'High_Risk_Work_Comp_pct',l:'High-Risk Work Compliance',   u:'%',   t:'p', better:'up'},
    ],
    overlayCharts:[
-     {title:'TRIR & LTIFR',        unit:'rate', datasets:[
-       {key:'TRIR',  label:'TRIR',  color:'#DC2626', type:'line'},
-       {key:'LTIFR', label:'LTIFR', color:'#F97316', type:'line'},
+     {title:'TRIR & LTIFR', unit:'rate', datasets:[
+       {key:'TRIR',  label:'TRIR',  color:'#DC2626',type:'line'},
+       {key:'LTIFR', label:'LTIFR', color:'#F97316',type:'line'},
      ]},
-     {title:'Near Miss Reports',            unit:'No.', datasets:[{key:'Near_Miss_Reports',       label:'Near Miss',   color:'#16A34A',type:'bar'}]},
-     {title:'High-Risk Work Compliance %',  unit:'%',   datasets:[{key:'High_Risk_Work_Comp_pct', label:'Compliance %',color:'#4ADE80',type:'line'}]},
+     {title:'High-Risk Work Compliance %', unit:'%', datasets:[{key:'High_Risk_Work_Comp_pct', label:'Compliance %',color:'#4ADE80',type:'line'}]},
    ]},
 
+  // ── IT ──
   {id:'IT', name:'IT Systems', abbr:'IT', color:'#0EA5E9', ini:'LT', mgr:'Mr Le Tuan Anh',
-   purpose:'Reliable systems and continuous improvement.',
+   purpose:'Reliable systems and support.',
    kpis:[
-     {k:'System_Uptime_pct',          l:'System Uptime',              u:'%',   t:'p'},
-     {k:'Cyber_Incidents',            l:'Cyber Incidents',            u:'No.', t:'i'},
-     {k:'Tickets_Closed_SLA_pct',     l:'Tickets Closed within SLA',  u:'%',   t:'p'},
-     {k:'Enhancement_Delivery',       l:'Enhancement Delivery',       u:'No.', t:'i'},
+     {k:'System_Uptime_pct',      l:'System Uptime',             u:'%',  t:'p'},
+     {k:'Cyber_Incidents',        l:'Cyber Incidents',           u:'No.',t:'i'},
+     {k:'Tickets_Closed_SLA_pct', l:'Tickets Closed within SLA', u:'%',  t:'p'},
    ],
    overlayCharts:[
-     {title:'System Uptime %',             unit:'%',   datasets:[{key:'System_Uptime_pct',      label:'Uptime %',       color:'#0EA5E9',type:'line'}]},
-     {title:'Cyber Incidents',             unit:'No.', datasets:[{key:'Cyber_Incidents',         label:'Incidents',      color:'#DC2626',type:'bar'}]},
+     {title:'System Uptime %',             unit:'%',   datasets:[{key:'System_Uptime_pct',      label:'Uptime %',        color:'#0EA5E9',type:'line'}]},
+     {title:'Cyber Incidents',             unit:'No.', datasets:[{key:'Cyber_Incidents',         label:'Incidents',       color:'#DC2626',type:'bar'}]},
      {title:'Tickets Closed within SLA %', unit:'%',   datasets:[{key:'Tickets_Closed_SLA_pct', label:'SLA Compliance %',color:'#38BDF8',type:'line'}]},
-     {title:'Enhancement Delivery',        unit:'No.', datasets:[{key:'Enhancement_Delivery',    label:'Enhancements',   color:'#0369A1',type:'bar'}]},
    ]},
 
+  // ── PROP ──
   {id:'PROP', name:'Property & Security', abbr:'PROP', color:'#84CC16', ini:'RP', mgr:'Rudy/Mr Phong',
    purpose:'Safe, compliant and well-maintained facilities.',
    kpis:[
-     {k:'Maintenance_Backlog',        l:'Maintenance Backlog',        u:'No.', t:'i'},
-     {k:'Fire_OHS_Compliance_pct',    l:'Fire & OHS Compliance',      u:'%',   t:'p'},
-     {k:'Security_Incidents',         l:'Security Incidents',         u:'No.', t:'i'},
+     {k:'Maintenance_Backlog',     l:'Maintenance Backlog',   u:'No.',t:'i'},
+     {k:'Fire_OHS_Compliance_pct', l:'Fire & OHS Compliance', u:'%',  t:'p'},
+     {k:'Security_Incidents',      l:'Security Incidents',    u:'No.',t:'i'},
    ],
    overlayCharts:[
-     {title:'Maintenance Backlog',     unit:'No.', datasets:[{key:'Maintenance_Backlog',     label:'Backlog Items',  color:'#84CC16',type:'bar'}]},
-     {title:'Fire & OHS Compliance %', unit:'%',   datasets:[{key:'Fire_OHS_Compliance_pct', label:'Compliance %',  color:'#65A30D',type:'line'}]},
-     {title:'Security Incidents',      unit:'No.', datasets:[{key:'Security_Incidents',       label:'Incidents',     color:'#DC2626',type:'bar'}]},
+     {title:'Maintenance Backlog',     unit:'No.', datasets:[{key:'Maintenance_Backlog',     label:'Backlog Items', color:'#84CC16',type:'bar'}]},
+     {title:'Fire & OHS Compliance %', unit:'%',   datasets:[{key:'Fire_OHS_Compliance_pct', label:'Compliance %', color:'#65A30D',type:'line'}]},
+     {title:'Security Incidents',      unit:'No.', datasets:[{key:'Security_Incidents',       label:'Incidents',    color:'#DC2626',type:'bar'}]},
    ]},
 ];
 
@@ -877,6 +907,17 @@ function el(id){ return document.getElementById(id); }
 // ═══════════════════════════════════════════════
 function fetchSheetData(cb){
   setSyncBadge('loading');
+  // DEMO MODE: bypass Google Sheets, use embedded CSV
+  if(DEMO_MODE && DEMO_CSV){
+    var parsed=parseCSV(DEMO_CSV);
+    if(parsed.length>1){
+      GS_HDR=parsed[0].map(function(h){return h.trim();});
+      GS_DATA=parsed.slice(1).filter(function(r){return r[0]&&r[0].trim();});
+      setSyncBadge('ok',GS_DATA.length);
+      fetchNotesData(cb);
+    } else { setSyncBadge('err',0); if(cb)cb(); }
+    return;
+  }
   fetch(SHEET_URL + '&t=' + Date.now())
     .then(function(r){ return r.text(); })
     .then(function(csv){
