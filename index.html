@@ -2395,14 +2395,15 @@ function openDrill(title, chartInstance, sub){
   // V38: re-apply note tooltips; V43: re-apply axis marker plugin
   var nOpts=chartInstance._noteOpts;
   if(nOpts&&nOpts.did&&nOpts.range){
+    applyNoteAxisConfig(cfg.options,nOpts.did,nOpts.range); // trước khi tạo chart
+  }
+  drillChart=new Chart(el('drill-canvas'),cfg);
+  if(nOpts&&nOpts.did&&nOpts.range){
     var labelFn=nOpts.isOverlay
       ? makeNoteLabel(nOpts.unit,nOpts.oc,nOpts.did,nOpts.range)
       : makeNoteLabel(nOpts.unit,null,nOpts.did,nOpts.range,nOpts.kpiKey||'');
     drillChart.options.plugins.tooltip.callbacks.label=labelFn;
     drillChart.options.plugins.tooltip.callbacks.afterBody=function(){return[];};
-    // V45: re-apply axis config (ticks.color handles color, no plugin needed)
-    applyNoteAxisConfig(drillChart.options,nOpts.did,nOpts.range);
-    drillChart.update('none');
     attachAxisNoteTooltip(drillChart,nOpts.did,nOpts.range);
   }
 }
