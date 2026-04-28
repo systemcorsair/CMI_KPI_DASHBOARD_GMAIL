@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V47</title>
+<title>CMI · KPI Dashboard V48</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -511,6 +511,7 @@ var DEPTS = [
   // ── QA ──
   {id:'QA', name:'Quality Assurance', abbr:'QA', color:'#D4537E', ini:'DA', mgr:'Mr Duy Anh',
    purpose:'Ensure first-time quality.',
+   topCatN:2,   // ← V48: show top N categories (change 2→3 to show all),
    kpis:[
      {k:'First_Time_Pass_pct',              l:'First Time Pass',              u:'%',   t:'p', better:'up'},
      {k:'Defects_Severity_A',               l:'Defects Severity A',           u:'No.', t:'i', better:'down'},
@@ -531,9 +532,9 @@ var DEPTS = [
      ]},
      {title:'Avg Close-out Time',            unit:'Days', datasets:[{key:'Avg_Closeout_Days_QA',            label:'Avg Days',        color:'#BE185D',type:'line'}]},
      {title:'Close-Out Data Completeness %', unit:'%',    datasets:[{key:'Close_Out_Data_Completeness_pct', label:'Completeness %',  color:'#A21CAF',type:'line'}]},
-     {title:'Repeat/New - Category 1',       unit:'%',    datasets:[{key:'QA_RepeatNew_Cat1_pct',           label:'Cat1 Repeat %',   color:'#F43F5E',type:'bar'}]},
-     {title:'Repeat/New - Category 2',       unit:'%',    datasets:[{key:'QA_RepeatNew_Cat2_pct',           label:'Cat2 Repeat %',   color:'#E11D48',type:'bar'}]},
-     {title:'Repeat/New - Category 3',       unit:'%',    datasets:[{key:'QA_RepeatNew_Cat3_pct',           label:'Cat3 Repeat %',   color:'#BE123C',type:'bar'}]},
+     {title:'Repeat/New - Category 1',       unit:'%',    topCat:true, datasets:[{key:'QA_RepeatNew_Cat1_pct',           label:'Cat1 Repeat %',   color:'#F43F5E',type:'bar'}]},
+     {title:'Repeat/New - Category 2',       unit:'%',    topCat:true, datasets:[{key:'QA_RepeatNew_Cat2_pct',           label:'Cat2 Repeat %',   color:'#E11D48',type:'bar'}]},
+     {title:'Repeat/New - Category 3',       unit:'%',    topCat:true, datasets:[{key:'QA_RepeatNew_Cat3_pct',           label:'Cat3 Repeat %',   color:'#BE123C',type:'bar'}]},
    ]},
 
   // ── DESIGN ──
@@ -1346,8 +1347,8 @@ function renderDeptRight(){
   el('rp-body').innerHTML='<div class="charts-grid" id="d-col"></div>';
   var col=el('d-col');
   if(dept.overlayCharts){
-    // twoBar charts (full-width) come first, single charts fill 2-col grid after
-    var sortedOC = dept.overlayCharts.slice().sort(function(a,b){
+    // twoBar charts (full-width) come first; V48: top-N cat filter applied via resolveOverlayCharts
+    var sortedOC = resolveOverlayCharts(dept, range).slice().sort(function(a,b){
       var aTwo = a.datasets.length===2&&a.datasets[0].type==='bar'&&a.datasets[1].type==='bar';
       var bTwo = b.datasets.length===2&&b.datasets[0].type==='bar'&&b.datasets[1].type==='bar';
       return (bTwo?1:0)-(aTwo?1:0);
@@ -1928,7 +1929,7 @@ function renderbodRight(id){
   body.innerHTML='<div class="charts-grid" id="b-col"></div>';
   var col=el('b-col');
   if(dept.overlayCharts){
-    var sortedOC2 = dept.overlayCharts.slice().sort(function(a,b){
+    var sortedOC2 = resolveOverlayCharts(dept, range).slice().sort(function(a,b){
       var aTwo = a.datasets.length===2&&a.datasets[0].type==='bar'&&a.datasets[1].type==='bar';
       var bTwo = b.datasets.length===2&&b.datasets[0].type==='bar'&&b.datasets[1].type==='bar';
       return (bTwo?1:0)-(aTwo?1:0);
@@ -1948,6 +1949,64 @@ function renderbodRight(id){
       CH[cid]=mkLine(cid,range.labels,kpi.l,vals,dept.color,kpi.u,{did:id,range:range,kpiKey:kpi.k});
     });
   }
+}
+
+
+// ═══════════════════════════════════════════════
+// V48 — TOP-N CATEGORY FILTER
+// Applies to any dept with topCatN > 0 and
+// overlayCharts flagged with topCat:true
+// ═══════════════════════════════════════════════
+
+// ── EDIT CATEGORY DISPLAY NAMES HERE ──────────
+// Replace 'CAT_1' / 'CAT_2' / 'CAT_3' with real
+// category names once confirmed by QA team.
+// Example: 'QA_RepeatNew_Cat1_pct': 'Hull Fit-out'
+var QA_CAT_LABELS = {
+  'QA_RepeatNew_Cat1_pct': 'CAT_1',   // ← edit name
+  'QA_RepeatNew_Cat2_pct': 'CAT_2',   // ← edit name
+  'QA_RepeatNew_Cat3_pct': 'CAT_3',   // ← edit name
+};
+// ──────────────────────────────────────────────
+
+// Score and return top N category overlayChart entries
+// by summing their values over the last 12 months of range
+function getTopNCatCharts(did, range, catCharts, n) {
+  var last12 = range.dkeys.slice(-12);
+  var scored = catCharts.map(function(oc) {
+    var key = oc.datasets[0].key;
+    var total = last12.reduce(function(s, dk) {
+      return s + (getGSVal(did, dk.y, dk.m, key) || 0);
+    }, 0);
+    return {oc: oc, total: Math.round(total * 10) / 10};
+  });
+  scored.sort(function(a, b) { return b.total - a.total; });
+  return scored.slice(0, n).map(function(s, rank) {
+    var oc  = s.oc;
+    var key = oc.datasets[0].key;
+    // Apply friendly name from QA_CAT_LABELS (extend map for other depts later)
+    var friendlyName = QA_CAT_LABELS[key] || oc.datasets[0].label || key;
+    // Clone to avoid mutating the original config
+    var clone = JSON.parse(JSON.stringify(oc));
+    clone.title        = '#' + (rank + 1) + ' ' + friendlyName + '  (Repeat/New %)';
+    clone.datasets[0].label = friendlyName;
+    clone._catRank  = rank + 1;
+    clone._catTotal = s.total;
+    return clone;
+  });
+}
+
+// Build the final overlayCharts list for a dept,
+// replacing topCat group with the top-N results.
+// Non-topCat charts are always rendered first (unchanged).
+function resolveOverlayCharts(dept, range) {
+  if (!dept.overlayCharts) return null;
+  if (!dept.topCatN)       return dept.overlayCharts;
+  var cats = dept.overlayCharts.filter(function(oc) { return oc.topCat; });
+  var rest = dept.overlayCharts.filter(function(oc) { return !oc.topCat; });
+  if (!cats.length) return dept.overlayCharts;
+  var topCats = getTopNCatCharts(dept.id, range, cats, dept.topCatN);
+  return rest.concat(topCats);
 }
 
 // ═══════════════════════════════════════════════
