@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V49</title>
+<title>CMI · KPI Dashboard V50</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -26,7 +26,21 @@ button{cursor:pointer}
 ::-webkit-scrollbar{width:5px}
 ::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:3px}
 
-/* ── V49: Top-N Category selector ── */
+/* ── V49/V50: Top-N Category selector ── */
+.cat-n-wrap{padding:10px 14px!important;background:var(--bl-bg)!important;
+  border:1px solid var(--bl-lt)!important;border-radius:var(--r)}
+.cat-n-banner{
+  position:sticky;
+  top:0;
+  z-index:9;          /* just below rp-hdr z-index:10 */
+  background:var(--sf);
+  padding:10px 20px 10px;  /* match .rp side padding */
+  margin:0 -20px 10px;     /* bleed to edges of .rp */
+  border-bottom:2px solid var(--bl-lt);
+  box-shadow:0 2px 6px rgba(0,0,0,.06);
+}
+.cat-n-banner:empty{display:none;}
+/* cat-n-btn reuses .drq styles */
 .cat-n-wrap{padding:10px 14px!important;background:var(--bl-bg)!important;
   border:1px solid var(--bl-lt)!important;border-radius:var(--r)}
 .cat-n-ctrl{display:flex;flex-direction:column;gap:3px}
@@ -1242,7 +1256,12 @@ function buildDeptLeft(){
 function onPC(){
   selM=parseInt(el('s-m').value);
   selY=parseInt(el('s-y').value);
-  buildDeptLeft(); renderDeptRight();
+  // V50: context-aware re-render (BOD vs dept)
+  if(U&&(U.role==='bod'||U.role==='admin')){
+    buildbodLeft(); renderbodRight(accOpen);
+  } else {
+    buildDeptLeft(); renderDeptRight();
+  }
 }
 function setQ(preset){
   document.querySelectorAll('.drq').forEach(function(b){b.classList.remove('act');});
@@ -1259,7 +1278,7 @@ function applyDR(){
   if(tm&&ty){drT={m:parseInt(tm.value),y:parseInt(ty.value)};}
   if(bfm&&bfy){drF={m:parseInt(bfm.value),y:parseInt(bfy.value)};}
   if(btm&&bty){drT={m:parseInt(btm.value),y:parseInt(bty.value)};}
-  if(U&&U.role==='bod') renderbodRight(accOpen);
+  if(U&&(U.role==='bod'||U.role==='admin')) renderbodRight(accOpen);
   else renderDeptRight();
 }
 
@@ -1354,19 +1373,16 @@ function renderDeptRight(){
   if(mw){var ud=getDeptUnreadBadge(deptId);mw.innerHTML='<button class="msg-action-btn" id="rp-open-msg" data-dept="'+deptId+'">&#x1F4AC; Messages'+ud+'</button>';}
   var range=buildRange(deptId);
   killCharts('d_');
-  el('rp-body').innerHTML='<div class="charts-grid" id="d-col"></div>';
+  // V50: sticky banner slot above charts-grid
+  el('rp-body').innerHTML='<div class="cat-n-banner" id="d-cat-banner"></div>'
+    +'<div class="charts-grid" id="d-col"></div>';
   var col=el('d-col');
+  if(dept.topCatN){
+    var bannerD=el('d-cat-banner');
+    bannerD.innerHTML=buildCatNControlHTML(dept,range);
+    bannerD.dataset.dept=dept.id;
+  }
   if(dept.overlayCharts){
-    // twoBar charts (full-width) come first; V48: top-N cat filter applied via resolveOverlayCharts
-    // V49: inject Top-N control bar for depts with category groups
-    if(dept.topCatN){
-      var ctrlD=document.createElement('div');
-      ctrlD.className='cc cc-span2 cat-n-wrap';
-      ctrlD.dataset.view='dept';
-      ctrlD.dataset.dept=dept.id;
-      ctrlD.innerHTML=buildCatNControlHTML(dept,range);
-      col.appendChild(ctrlD);
-    }
     var sortedOC = resolveOverlayCharts(dept, range).slice().sort(function(a,b){
       var aTwo = a.datasets.length===2&&a.datasets[0].type==='bar'&&a.datasets[1].type==='bar';
       var bTwo = b.datasets.length===2&&b.datasets[0].type==='bar'&&b.datasets[1].type==='bar';
@@ -1945,18 +1961,16 @@ function renderbodRight(id){
   el('rp-title').textContent=dept.name;
   el('rp-sub').textContent=''; // purpose removed (V14)
   var range=buildRange(id);
-  body.innerHTML='<div class="charts-grid" id="b-col"></div>';
+  // V50: sticky banner slot above charts-grid
+  body.innerHTML='<div class="cat-n-banner" id="b-cat-banner"></div>'
+    +'<div class="charts-grid" id="b-col"></div>';
   var col=el('b-col');
+  if(dept.topCatN){
+    var bannerB=el('b-cat-banner');
+    bannerB.innerHTML=buildCatNControlHTML(dept,range);
+    bannerB.dataset.dept=dept.id;
+  }
   if(dept.overlayCharts){
-    // V49: inject Top-N control bar for depts with category groups
-    if(dept.topCatN){
-      var ctrlB=document.createElement('div');
-      ctrlB.className='cc cc-span2 cat-n-wrap';
-      ctrlB.dataset.view='bod';
-      ctrlB.dataset.dept=dept.id;
-      ctrlB.innerHTML=buildCatNControlHTML(dept,range);
-      col.appendChild(ctrlB);
-    }
     var sortedOC2 = resolveOverlayCharts(dept, range).slice().sort(function(a,b){
       var aTwo = a.datasets.length===2&&a.datasets[0].type==='bar'&&a.datasets[1].type==='bar';
       var bTwo = b.datasets.length===2&&b.datasets[0].type==='bar'&&b.datasets[1].type==='bar';
@@ -2974,7 +2988,13 @@ document.addEventListener('DOMContentLoaded',function(){
     var did=wrap.dataset.dept;
     if(!did) return;
     CAT_N_OVERRIDE[did]=n;
-    // Re-render: dept view or BOD view
+    // V50: update banner without full re-render to avoid scroll jump
+    var range=buildRange(did);
+    var bannerId=(U&&(U.role==='bod'||U.role==='admin'))?'b-cat-banner':'d-cat-banner';
+    var banner=el(bannerId);
+    if(banner){banner.innerHTML=buildCatNControlHTML(
+      DEPTS.find(function(d){return d.id===did;}),range);}
+    // Re-render charts only
     if(U&&(U.role==='bod'||U.role==='admin')) renderbodRight(did);
     else renderDeptRight();
   });
