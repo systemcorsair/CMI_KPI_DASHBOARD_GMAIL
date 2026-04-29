@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V51</title>
+<title>CMI · KPI Dashboard V52</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -29,17 +29,37 @@ button{cursor:pointer}
 /* ── V49/V50: Top-N Category selector ── */
 .cat-n-wrap{padding:10px 14px!important;background:var(--bl-bg)!important;
   border:1px solid var(--bl-lt)!important;border-radius:var(--r)}
-.cat-n-banner{
+/* V52: banner is direct child of .rp → position:sticky now reliable */
+#cat-n-banner-slot{
   position:sticky;
   top:0;
   z-index:9;          /* just below rp-hdr z-index:10 */
   background:var(--sf);
-  padding:10px 20px 12px;  /* match .rp side padding */
-  margin:0 -20px 12px;     /* bleed to edges of .rp */
+  padding:0;
+  margin:0 -20px;
+  display:none;       /* hidden when empty */
+}
+#cat-n-banner-slot.has-content{
+  display:block;
+  padding:10px 20px 12px;
   border-bottom:2px solid var(--bl-lt);
   box-shadow:0 3px 8px rgba(0,0,0,.07);
+  margin-bottom:0;
 }
 .cat-n-banner:empty{display:none;}
+/* V52: 12-month total badge on topCat charts */
+.cat-total-badge{
+  display:inline-block;
+  font-size:10px;
+  color:var(--mu);
+  background:var(--bl-bg);
+  border:1px solid var(--bl-lt);
+  border-radius:10px;
+  padding:1px 8px;
+  margin:3px 0 5px;
+}
+.cat-total-badge b{color:var(--bl);font-weight:700;}
+
 /* cat-n-btn pill — compact for up to 10 categories */
 .cat-n-btn{font-size:10px!important;padding:3px 8px!important;min-width:36px}
 .cat-n-btn.act{background:var(--bl)!important;color:#fff!important;border-color:var(--bl)!important}
@@ -422,6 +442,7 @@ tbody tr:hover td{background:var(--sf2)}
         </div>
         <div style="display:flex;align-items:center;gap:6px"><div id="rp-msg-btn-wrap"></div><button class="msg-action-btn hidden" id="rp-hist-btn">&#x1F4CB; History</button><button id="btn-bod-back" class="hidden">← Overview</button></div>
       </div>
+      <div id="cat-n-banner-slot"></div>
       <div id="rp-body"></div>
     </div>
   
@@ -1389,14 +1410,15 @@ function renderDeptRight(){
   if(mw){var ud=getDeptUnreadBadge(deptId);mw.innerHTML='<button class="msg-action-btn" id="rp-open-msg" data-dept="'+deptId+'">&#x1F4AC; Messages'+ud+'</button>';}
   var range=buildRange(deptId);
   killCharts('d_');
-  // V50: sticky banner slot above charts-grid
-  el('rp-body').innerHTML='<div class="cat-n-banner" id="d-cat-banner"></div>'
-    +'<div class="charts-grid" id="d-col"></div>';
+  // V52: sticky banner in dedicated slot (direct child of .rp)
+  var slot=el('cat-n-banner-slot');
+  if(slot){slot.innerHTML=''; slot.className=''; slot.dataset.dept='';}
+  el('rp-body').innerHTML='<div class="charts-grid" id="d-col"></div>';
   var col=el('d-col');
-  if(dept.topCatN){
-    var bannerD=el('d-cat-banner');
-    bannerD.innerHTML=buildCatNControlHTML(dept,range);
-    bannerD.dataset.dept=dept.id;
+  if(dept.topCatN && slot){
+    slot.innerHTML=buildCatNControlHTML(dept,range);
+    slot.dataset.dept=dept.id;
+    slot.className='has-content';
   }
   if(dept.overlayCharts){
     var sortedOC = resolveOverlayCharts(dept, range).slice().sort(function(a,b){
@@ -1611,6 +1633,19 @@ function renderOverlayChart(col, cid, oc, range, did, gridMode){
   }
   var div=wrapper;
   col.appendChild(div);
+  // V52: topCat charts get a 12-month total badge
+  if(oc.topCat && oc.datasets.length===1){
+    var last12keys=range.dkeys.slice(-12);
+    var total12=last12keys.reduce(function(s,dk){
+      return s+(getGSVal(did,dk.y,dk.m,oc.datasets[0].key)||0);
+    },0);
+    var badge=document.createElement('div');
+    badge.className='cat-total-badge';
+    badge.innerHTML='12M total: <b>'+total12.toFixed(1)+'</b>';
+    var ccS=div.querySelector('.cc-s');
+    if(ccS) ccS.insertAdjacentElement('afterend',badge);
+    else div.insertAdjacentElement('afterbegin',badge);
+  }
   var many=range.labels.length>24;
   var isTwoBar=oc.datasets.length===2&&oc.datasets[0].type==='bar'&&oc.datasets[1].type==='bar';
   var datasets=oc.datasets.map(function(ds){
@@ -1919,6 +1954,9 @@ function renderbodRight(id){
   killCharts('b_');
   var body=el('rp-body');
   var backBtn=el('btn-bod-back');
+  // V52: clear sticky banner when navigating
+  var _sl=el('cat-n-banner-slot');
+  if(_sl){_sl.innerHTML='';_sl.className='';_sl.dataset.dept='';}
 
   if(!id){
     // FIX #6: hide back button on overview
@@ -1977,14 +2015,15 @@ function renderbodRight(id){
   el('rp-title').textContent=dept.name;
   el('rp-sub').textContent=''; // purpose removed (V14)
   var range=buildRange(id);
-  // V50: sticky banner slot above charts-grid
-  body.innerHTML='<div class="cat-n-banner" id="b-cat-banner"></div>'
-    +'<div class="charts-grid" id="b-col"></div>';
+  // V52: sticky banner in dedicated slot (direct child of .rp)
+  var slot=el('cat-n-banner-slot');
+  if(slot){slot.innerHTML=''; slot.className=''; slot.dataset.dept='';}
+  body.innerHTML='<div class="charts-grid" id="b-col"></div>';
   var col=el('b-col');
-  if(dept.topCatN){
-    var bannerB=el('b-cat-banner');
-    bannerB.innerHTML=buildCatNControlHTML(dept,range);
-    bannerB.dataset.dept=dept.id;
+  if(dept.topCatN && slot){
+    slot.innerHTML=buildCatNControlHTML(dept,range);
+    slot.dataset.dept=dept.id;
+    slot.className='has-content';
   }
   if(dept.overlayCharts){
     var sortedOC2 = resolveOverlayCharts(dept, range).slice().sort(function(a,b){
@@ -3015,10 +3054,11 @@ document.addEventListener('DOMContentLoaded',function(){
     CAT_N_OVERRIDE[did]=n;
     // V50: update banner without full re-render to avoid scroll jump
     var range=buildRange(did);
-    var bannerId=(U&&(U.role==='bod'||U.role==='admin'))?'b-cat-banner':'d-cat-banner';
-    var banner=el(bannerId);
-    if(banner){banner.innerHTML=buildCatNControlHTML(
-      DEPTS.find(function(d){return d.id===did;}),range);}
+    // V52: banner lives in shared #cat-n-banner-slot
+    var slot2=el('cat-n-banner-slot');
+    if(slot2){slot2.innerHTML=buildCatNControlHTML(
+      DEPTS.find(function(d){return d.id===did;}),range);
+      slot2.dataset.dept=did; slot2.className='has-content';}
     // Re-render charts only
     if(U&&(U.role==='bod'||U.role==='admin')) renderbodRight(did);
     else renderDeptRight();
