@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V50</title>
+<title>CMI · KPI Dashboard V51</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -34,13 +34,15 @@ button{cursor:pointer}
   top:0;
   z-index:9;          /* just below rp-hdr z-index:10 */
   background:var(--sf);
-  padding:10px 20px 10px;  /* match .rp side padding */
-  margin:0 -20px 10px;     /* bleed to edges of .rp */
+  padding:10px 20px 12px;  /* match .rp side padding */
+  margin:0 -20px 12px;     /* bleed to edges of .rp */
   border-bottom:2px solid var(--bl-lt);
-  box-shadow:0 2px 6px rgba(0,0,0,.06);
+  box-shadow:0 3px 8px rgba(0,0,0,.07);
 }
 .cat-n-banner:empty{display:none;}
-/* cat-n-btn reuses .drq styles */
+/* cat-n-btn pill — compact for up to 10 categories */
+.cat-n-btn{font-size:10px!important;padding:3px 8px!important;min-width:36px}
+.cat-n-btn.act{background:var(--bl)!important;color:#fff!important;border-color:var(--bl)!important}
 .cat-n-wrap{padding:10px 14px!important;background:var(--bl-bg)!important;
   border:1px solid var(--bl-lt)!important;border-radius:var(--r)}
 .cat-n-ctrl{display:flex;flex-direction:column;gap:3px}
@@ -524,7 +526,7 @@ var DEPTS = [
      {title:'Boats Completed',              unit:'No.', datasets:[{key:'Boats_Completed',           label:'Boats',           color:'#1D4ED8',type:'bar'}]},
      {title:'Stage Gate Compliance %',      unit:'%',   datasets:[{key:'Stage_Gate_Compliance_pct', label:'Stage Gate %',    color:'#0EA5E9',type:'line'}]},
      {title:'Defects per Boat - SW1160',    unit:'No.', datasets:[{key:'Defects_per_Boat_SW1160',   label:'SW1160',          color:'#F97316',type:'bar'}]},
-     {title:'Defects per Boat - SW1270',    unit:'No.', datasets:[{key:'Defects_per_Boat_SW1270',   label:'SW1270',          color:'#EF4444',type:'bar'}]},
+     {title:'Defects per Boat - SW1270',    unit:'No.', datasets:[{key:'Defects_per_Boat_SW1270',   label:'SW1260-1270',          color:'#EF4444',type:'bar'}]},
      {title:'Defects per Boat - SW1370',    unit:'No.', datasets:[{key:'Defects_per_Boat_SW1370',   label:'SW1370',          color:'#DC2626',type:'bar'}]},
      {title:'Defects per Boat - SW1600',    unit:'No.', datasets:[{key:'Defects_per_Boat_SW1600',   label:'SW1600',          color:'#B45309',type:'bar'}]},
      {title:'Defects per Boat - C760',      unit:'No.', datasets:[{key:'Defects_per_Boat_C760',     label:'C760',            color:'#7C3AED',type:'bar'}]},
@@ -535,7 +537,7 @@ var DEPTS = [
   // ── QA ──
   {id:'QA', name:'Quality Assurance', abbr:'QA', color:'#D4537E', ini:'DA', mgr:'Mr Duy Anh',
    purpose:'Ensure first-time quality.',
-   topCatN:2,   // ← V48: show top N categories (change 2→3 to show all),
+   topCatN:3,   // ← default shown; user can pick 1-10 via pill buttons
    kpis:[
      {k:'First_Time_Pass_pct',              l:'First Time Pass',              u:'%',   t:'p', better:'up'},
      {k:'Defects_Severity_A',               l:'Defects Severity A',           u:'No.', t:'i', better:'down'},
@@ -543,9 +545,16 @@ var DEPTS = [
      {k:'Defects_Severity_C',               l:'Defects Severity C',           u:'No.', t:'i', better:'down'},
      {k:'Avg_Closeout_Days_QA',             l:'Avg Close-out Time',           u:'Days',t:'p', better:'down'},
      {k:'Close_Out_Data_Completeness_pct',  l:'Close-Out Data Completeness',  u:'%',   t:'p', better:'up'},
-     {k:'QA_RepeatNew_Cat1_pct',            l:'Repeat/New - Category 1',      u:'%',   t:'p', better:'down'},
-     {k:'QA_RepeatNew_Cat2_pct',            l:'Repeat/New - Category 2',      u:'%',   t:'p', better:'down'},
-     {k:'QA_RepeatNew_Cat3_pct',            l:'Repeat/New - Category 3',      u:'%',   t:'p', better:'down'},
+     {k:'QA_RepeatNew_Gelcoat_Flowcoat_pct', l:'Repeat/New - Gelcoat / Flowcoat', u:'%', t:'p', better:'down'},
+     {k:'QA_RepeatNew_TimberFitout_pct', l:'Repeat/New - Timber Fitout', u:'%', t:'p', better:'down'},
+     {k:'QA_RepeatNew_Deckgear_pct', l:'Repeat/New - Deckgear', u:'%', t:'p', better:'down'},
+     {k:'QA_RepeatNew_Plumbing_pct', l:'Repeat/New - Plumbing', u:'%', t:'p', better:'down'},
+     {k:'QA_RepeatNew_Window_Glass_pct', l:'Repeat/New - Window / Glass', u:'%', t:'p', better:'down'},
+     {k:'QA_RepeatNew_Detailing_pct', l:'Repeat/New - Detailing', u:'%', t:'p', better:'down'},
+     {k:'QA_RepeatNew_Lamination_process_pct', l:'Repeat/New - Lamination Process', u:'%', t:'p', better:'down'},
+     {k:'QA_RepeatNew_Electrical_pct', l:'Repeat/New - Electrical', u:'%', t:'p', better:'down'},
+     {k:'QA_RepeatNew_Upholstery_pct', l:'Repeat/New - Upholstery', u:'%', t:'p', better:'down'},
+     {k:'QA_RepeatNew_Structural_Integrity_pct', l:'Repeat/New - Structural Integrity', u:'%', t:'p', better:'down'},
    ],
    overlayCharts:[
      {title:'First Time Pass %',             unit:'%',    datasets:[{key:'First_Time_Pass_pct',             label:'FTP %',          color:'#D4537E',type:'line'}]},
@@ -556,9 +565,16 @@ var DEPTS = [
      ]},
      {title:'Avg Close-out Time',            unit:'Days', datasets:[{key:'Avg_Closeout_Days_QA',            label:'Avg Days',        color:'#BE185D',type:'line'}]},
      {title:'Close-Out Data Completeness %', unit:'%',    datasets:[{key:'Close_Out_Data_Completeness_pct', label:'Completeness %',  color:'#A21CAF',type:'line'}]},
-     {title:'Repeat/New - Category 1',       unit:'%',    topCat:true, datasets:[{key:'QA_RepeatNew_Cat1_pct',           label:'Cat1 Repeat %',   color:'#F43F5E',type:'bar'}]},
-     {title:'Repeat/New - Category 2',       unit:'%',    topCat:true, datasets:[{key:'QA_RepeatNew_Cat2_pct',           label:'Cat2 Repeat %',   color:'#E11D48',type:'bar'}]},
-     {title:'Repeat/New - Category 3',       unit:'%',    topCat:true, datasets:[{key:'QA_RepeatNew_Cat3_pct',           label:'Cat3 Repeat %',   color:'#BE123C',type:'bar'}]},
+     {title:'Repeat/New - Gelcoat / Flowcoat', unit:'%', topCat:true, datasets:[{key:'QA_RepeatNew_Gelcoat_Flowcoat_pct', label:'Gelcoat / Flowcoat', color:'#F43F5E', type:'bar'}]},
+     {title:'Repeat/New - Timber Fitout', unit:'%', topCat:true, datasets:[{key:'QA_RepeatNew_TimberFitout_pct', label:'Timber Fitout', color:'#E11D48', type:'bar'}]},
+     {title:'Repeat/New - Deckgear', unit:'%', topCat:true, datasets:[{key:'QA_RepeatNew_Deckgear_pct', label:'Deckgear', color:'#BE123C', type:'bar'}]},
+     {title:'Repeat/New - Plumbing', unit:'%', topCat:true, datasets:[{key:'QA_RepeatNew_Plumbing_pct', label:'Plumbing', color:'#9F1239', type:'bar'}]},
+     {title:'Repeat/New - Window / Glass', unit:'%', topCat:true, datasets:[{key:'QA_RepeatNew_Window_Glass_pct', label:'Window / Glass', color:'#C026D3', type:'bar'}]},
+     {title:'Repeat/New - Detailing', unit:'%', topCat:true, datasets:[{key:'QA_RepeatNew_Detailing_pct', label:'Detailing', color:'#A21CAF', type:'bar'}]},
+     {title:'Repeat/New - Lamination Process', unit:'%', topCat:true, datasets:[{key:'QA_RepeatNew_Lamination_process_pct', label:'Lamination Process', color:'#7E22CE', type:'bar'}]},
+     {title:'Repeat/New - Electrical', unit:'%', topCat:true, datasets:[{key:'QA_RepeatNew_Electrical_pct', label:'Electrical', color:'#6D28D9', type:'bar'}]},
+     {title:'Repeat/New - Upholstery', unit:'%', topCat:true, datasets:[{key:'QA_RepeatNew_Upholstery_pct', label:'Upholstery', color:'#4F46E5', type:'bar'}]},
+     {title:'Repeat/New - Structural Integrity', unit:'%', topCat:true, datasets:[{key:'QA_RepeatNew_Structural_Integrity_pct', label:'Structural Integrity', color:'#3730A3', type:'bar'}]},
    ]},
 
   // ── DESIGN ──
@@ -2004,10 +2020,19 @@ function renderbodRight(id){
 // Replace 'CAT_1' / 'CAT_2' / 'CAT_3' with real
 // category names once confirmed by QA team.
 // Example: 'QA_RepeatNew_Cat1_pct': 'Hull Fit-out'
+// ── QA Category display names ─────────────────
+// Keys must match Google Sheet column headers
 var QA_CAT_LABELS = {
-  'QA_RepeatNew_Cat1_pct': 'CAT_1',   // ← edit name
-  'QA_RepeatNew_Cat2_pct': 'CAT_2',   // ← edit name
-  'QA_RepeatNew_Cat3_pct': 'CAT_3',   // ← edit name
+  'QA_RepeatNew_Gelcoat_Flowcoat_pct': 'Gelcoat / Flowcoat',
+  'QA_RepeatNew_TimberFitout_pct': 'Timber Fitout',
+  'QA_RepeatNew_Deckgear_pct': 'Deckgear',
+  'QA_RepeatNew_Plumbing_pct': 'Plumbing',
+  'QA_RepeatNew_Window_Glass_pct': 'Window / Glass',
+  'QA_RepeatNew_Detailing_pct': 'Detailing',
+  'QA_RepeatNew_Lamination_process_pct': 'Lamination Process',
+  'QA_RepeatNew_Electrical_pct': 'Electrical',
+  'QA_RepeatNew_Upholstery_pct': 'Upholstery',
+  'QA_RepeatNew_Structural_Integrity_pct': 'Structural Integrity',
 };
 // ──────────────────────────────────────────────
 
