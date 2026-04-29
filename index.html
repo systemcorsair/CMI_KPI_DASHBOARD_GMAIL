@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V52</title>
+<title>CMI · KPI Dashboard V52b</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -31,22 +31,19 @@ button{cursor:pointer}
   border:1px solid var(--bl-lt)!important;border-radius:var(--r)}
 /* V52: banner is direct child of .rp → position:sticky now reliable */
 #cat-n-banner-slot{
-  position:sticky;
-  top:0;
-  z-index:9;          /* just below rp-hdr z-index:10 */
+  flex-shrink:0;
   background:var(--sf);
   padding:0;
-  margin:0 -20px;
-  display:none;       /* hidden when empty */
+  display:none;
 }
 #cat-n-banner-slot.has-content{
   display:block;
   padding:10px 20px 12px;
   border-bottom:2px solid var(--bl-lt);
   box-shadow:0 3px 8px rgba(0,0,0,.07);
-  margin-bottom:0;
 }
 .cat-n-banner:empty{display:none;}
+#rp-body{flex:1;overflow-y:auto;padding:0 20px 18px;min-height:0}
 /* V52: 12-month total badge on topCat charts */
 .cat-total-badge{
   display:inline-block;
@@ -119,7 +116,7 @@ button{cursor:pointer}
 .lp{width:var(--lw);flex-shrink:0;background:var(--sf);border-right:1px solid var(--bd);
   overflow:hidden;display:flex;flex-direction:column}
 .lp-sc{flex:1;overflow-y:auto;padding:0 0 14px 0}
-.rp{flex:1;min-width:0;overflow-y:auto;padding:0 20px 18px;background:var(--bg)}
+.rp{flex:1;min-width:0;overflow:hidden;display:flex;flex-direction:column;background:var(--bg)}
 .lsec{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;
   color:var(--hi);margin:14px 0 7px}
 .lsec:first-child{margin-top:0}
@@ -231,8 +228,8 @@ button{cursor:pointer}
 /* ── RIGHT PANEL ── */
 /* FIX #6: back button */
 .rp-hdr{display:flex;align-items:flex-start;justify-content:space-between;
-  position:sticky;top:0;z-index:10;background:var(--bg);
-  margin:0 -20px 16px;padding:16px 20px 14px;
+  flex-shrink:0;background:var(--bg);
+  padding:16px 20px 14px;
   border-bottom:1px solid var(--bd2);
   box-shadow:0 2px 8px rgba(0,0,0,.07)}
 .rp-hdr-left{}
@@ -534,7 +531,7 @@ var DEPTS = [
      {k:'Boats_Completed',            l:'Boats Completed',            u:'No.',t:'i', better:'up'},
      {k:'Stage_Gate_Compliance_pct',  l:'Stage Gate Compliance',      u:'%',  t:'p', better:'up'},
      {k:'Defects_per_Boat_SW1160',    l:'Defects/Boat SW1160',        u:'No.',t:'p', better:'down'},
-     {k:'Defects_per_Boat_SW1270',    l:'Defects/Boat SW1260-1270',        u:'No.',t:'p', better:'down'},
+     {k:'Defects_per_Boat_SW1270',    l:'Defects/Boat SW1270',        u:'No.',t:'p', better:'down'},
      {k:'Defects_per_Boat_SW1370',    l:'Defects/Boat SW1370',        u:'No.',t:'p', better:'down'},
      {k:'Defects_per_Boat_SW1600',    l:'Defects/Boat SW1600',        u:'No.',t:'p', better:'down'},
      {k:'Defects_per_Boat_C760',      l:'Defects/Boat C760',          u:'No.',t:'p', better:'down'},
@@ -547,7 +544,7 @@ var DEPTS = [
      {title:'Boats Completed',              unit:'No.', datasets:[{key:'Boats_Completed',           label:'Boats',           color:'#1D4ED8',type:'bar'}]},
      {title:'Stage Gate Compliance %',      unit:'%',   datasets:[{key:'Stage_Gate_Compliance_pct', label:'Stage Gate %',    color:'#0EA5E9',type:'line'}]},
      {title:'Defects per Boat - SW1160',    unit:'No.', datasets:[{key:'Defects_per_Boat_SW1160',   label:'SW1160',          color:'#F97316',type:'bar'}]},
-     {title:'Defects per Boat - SW1260-1270',    unit:'No.', datasets:[{key:'Defects_per_Boat_SW1270',   label:'SW1260-1270',          color:'#EF4444',type:'bar'}]},
+     {title:'Defects per Boat - SW1270',    unit:'No.', datasets:[{key:'Defects_per_Boat_SW1270',   label:'SW1260-1270',          color:'#EF4444',type:'bar'}]},
      {title:'Defects per Boat - SW1370',    unit:'No.', datasets:[{key:'Defects_per_Boat_SW1370',   label:'SW1370',          color:'#DC2626',type:'bar'}]},
      {title:'Defects per Boat - SW1600',    unit:'No.', datasets:[{key:'Defects_per_Boat_SW1600',   label:'SW1600',          color:'#B45309',type:'bar'}]},
      {title:'Defects per Boat - C760',      unit:'No.', datasets:[{key:'Defects_per_Boat_C760',     label:'C760',            color:'#7C3AED',type:'bar'}]},
