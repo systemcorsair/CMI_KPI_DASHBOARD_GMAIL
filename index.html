@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V52b</title>
+<title>CMI · KPI Dashboard V53</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -658,15 +658,24 @@ var DEPTS = [
   // ── TL ──
   {id:'TL', name:'Thailand Handover', abbr:'TH', color:'#F97316', ini:'PH', mgr:'Phil Harper',
    purpose:'Clean delivery and handover.',
+   topCatN:3,   // ← default shown; user can pick 1-5 via pill buttons
    kpis:[
      {k:'Handovers_Completed',     l:'Handovers Completed',            u:'No.',t:'i', better:'up'},
      {k:'Delivery_to_Planned_pct', l:'Delivery to Planned Date',       u:'%',  t:'p', better:'up'},
-     {k:'TH_RepeatNew_Cat_pct',    l:'Repeat/New Defects by Category', u:'%',  t:'p', better:'down'},
+     {k:'TL_RepeatNew_CAT_01_pct', l:'Repeat/New - CAT_01', u:'%', t:'p', better:'down'},
+     {k:'TL_RepeatNew_CAT_02_pct', l:'Repeat/New - CAT_02', u:'%', t:'p', better:'down'},
+     {k:'TL_RepeatNew_CAT_03_pct', l:'Repeat/New - CAT_03', u:'%', t:'p', better:'down'},
+     {k:'TL_RepeatNew_CAT_04_pct', l:'Repeat/New - CAT_04', u:'%', t:'p', better:'down'},
+     {k:'TL_RepeatNew_CAT_05_pct', l:'Repeat/New - CAT_05', u:'%', t:'p', better:'down'},
    ],
    overlayCharts:[
-     {title:'Handovers Completed',             unit:'No.', datasets:[{key:'Handovers_Completed',     label:'Handovers',  color:'#F97316',type:'bar'}]},
-     {title:'Delivery to Planned Date %',       unit:'%',   datasets:[{key:'Delivery_to_Planned_pct', label:'On-Time %',  color:'#FB923C',type:'line'}]},
-     {title:'Repeat/New Defects by Category %', unit:'%',   datasets:[{key:'TH_RepeatNew_Cat_pct',    label:'Repeat %',   color:'#EF4444',type:'bar'}]},
+     {title:'Handovers Completed',       unit:'No.', datasets:[{key:'Handovers_Completed',     label:'Handovers', color:'#F97316',type:'bar'}]},
+     {title:'Delivery to Planned Date %', unit:'%',  datasets:[{key:'Delivery_to_Planned_pct', label:'On-Time %', color:'#FB923C',type:'line'}]},
+     {title:'Repeat/New - CAT_01', unit:'%', topCat:true, datasets:[{key:'TL_RepeatNew_CAT_01_pct', label:'CAT_01', color:'#F97316', type:'bar'}]},
+     {title:'Repeat/New - CAT_02', unit:'%', topCat:true, datasets:[{key:'TL_RepeatNew_CAT_02_pct', label:'CAT_02', color:'#FB923C', type:'bar'}]},
+     {title:'Repeat/New - CAT_03', unit:'%', topCat:true, datasets:[{key:'TL_RepeatNew_CAT_03_pct', label:'CAT_03', color:'#EF4444', type:'bar'}]},
+     {title:'Repeat/New - CAT_04', unit:'%', topCat:true, datasets:[{key:'TL_RepeatNew_CAT_04_pct', label:'CAT_04', color:'#DC2626', type:'bar'}]},
+     {title:'Repeat/New - CAT_05', unit:'%', topCat:true, datasets:[{key:'TL_RepeatNew_CAT_05_pct', label:'CAT_05', color:'#C2410C', type:'bar'}]},
    ]},
 
   // ── SALES ──
@@ -702,19 +711,28 @@ var DEPTS = [
   // ── CS ──
   {id:'CS', name:'Customer Service', abbr:'CS', color:'#0891B2', ini:'VN', mgr:'Van Nguyen',
    purpose:'Warranty control and resolution.',
+   topCatN:3,   // ← default shown; user can pick 1-5 via pill buttons
    kpis:[
-     {k:'Warranty_Claims_Open', l:'Warranty Claims Open',           u:'No.', t:'i', better:'down'},
-     {k:'New_Claims',           l:'New Claims',                     u:'No.', t:'i', better:'down'},
-     {k:'Avg_Closeout_Days_CS', l:'Avg Close-out Time',             u:'Days',t:'p', better:'down'},
-     {k:'CS_RepeatNew_Cat_pct', l:'Repeat Warranty Issues by Cat.', u:'%',   t:'p', better:'down'},
+     {k:'Warranty_Claims_Open', l:'Warranty Claims Open',  u:'No.', t:'i', better:'down'},
+     {k:'New_Claims',           l:'New Claims',            u:'No.', t:'i', better:'down'},
+     {k:'Avg_Closeout_Days_CS', l:'Avg Close-out Time',   u:'Days',t:'p', better:'down'},
+     {k:'CS_RepeatNew_CAT_01_pct', l:'Repeat/New - CAT_01', u:'%', t:'p', better:'down'},
+     {k:'CS_RepeatNew_CAT_02_pct', l:'Repeat/New - CAT_02', u:'%', t:'p', better:'down'},
+     {k:'CS_RepeatNew_CAT_03_pct', l:'Repeat/New - CAT_03', u:'%', t:'p', better:'down'},
+     {k:'CS_RepeatNew_CAT_04_pct', l:'Repeat/New - CAT_04', u:'%', t:'p', better:'down'},
+     {k:'CS_RepeatNew_CAT_05_pct', l:'Repeat/New - CAT_05', u:'%', t:'p', better:'down'},
    ],
    overlayCharts:[
      {title:'Claims Open vs New', unit:'No.', datasets:[
        {key:'Warranty_Claims_Open', label:'Open',       color:'#F87171',type:'bar'},
        {key:'New_Claims',           label:'New Claims', color:'#0891B2',type:'bar'},
      ]},
-     {title:'Avg Close-out Time',               unit:'Days', datasets:[{key:'Avg_Closeout_Days_CS',  label:'Avg Days', color:'#0E7490',type:'line'}]},
-     {title:'Repeat Warranty Issues by Cat. %', unit:'%',    datasets:[{key:'CS_RepeatNew_Cat_pct',  label:'Repeat %', color:'#EF4444',type:'bar'}]},
+     {title:'Avg Close-out Time', unit:'Days', datasets:[{key:'Avg_Closeout_Days_CS', label:'Avg Days', color:'#0E7490',type:'line'}]},
+     {title:'Repeat/New - CAT_01', unit:'%', topCat:true, datasets:[{key:'CS_RepeatNew_CAT_01_pct', label:'CAT_01', color:'#0891B2', type:'bar'}]},
+     {title:'Repeat/New - CAT_02', unit:'%', topCat:true, datasets:[{key:'CS_RepeatNew_CAT_02_pct', label:'CAT_02', color:'#0E7490', type:'bar'}]},
+     {title:'Repeat/New - CAT_03', unit:'%', topCat:true, datasets:[{key:'CS_RepeatNew_CAT_03_pct', label:'CAT_03', color:'#0284C7', type:'bar'}]},
+     {title:'Repeat/New - CAT_04', unit:'%', topCat:true, datasets:[{key:'CS_RepeatNew_CAT_04_pct', label:'CAT_04', color:'#0369A1', type:'bar'}]},
+     {title:'Repeat/New - CAT_05', unit:'%', topCat:true, datasets:[{key:'CS_RepeatNew_CAT_05_pct', label:'CAT_05', color:'#075985', type:'bar'}]},
    ]},
 
   // ── FIN ──
@@ -2070,6 +2088,28 @@ var QA_CAT_LABELS = {
   'QA_RepeatNew_Upholstery_pct': 'Upholstery',
   'QA_RepeatNew_Structural_Integrity_pct': 'Structural Integrity',
 };
+
+// ── TL (Thailand Handover) Category display names ──
+// Keys must match Google Sheet column headers
+// ↓ EDIT tên Category TL tại đây ──────────────────
+var TL_CAT_LABELS = {
+  'TL_RepeatNew_CAT_01_pct': 'CAT_01',   // ← đổi tên
+  'TL_RepeatNew_CAT_02_pct': 'CAT_02',   // ← đổi tên
+  'TL_RepeatNew_CAT_03_pct': 'CAT_03',   // ← đổi tên
+  'TL_RepeatNew_CAT_04_pct': 'CAT_04',   // ← đổi tên
+  'TL_RepeatNew_CAT_05_pct': 'CAT_05',   // ← đổi tên
+};
+
+// ── CS (Customer Service) Category display names ──
+// Keys must match Google Sheet column headers
+// ↓ EDIT tên Category CS tại đây ───────────────────
+var CS_CAT_LABELS = {
+  'CS_RepeatNew_CAT_01_pct': 'CAT_01',   // ← đổi tên
+  'CS_RepeatNew_CAT_02_pct': 'CAT_02',   // ← đổi tên
+  'CS_RepeatNew_CAT_03_pct': 'CAT_03',   // ← đổi tên
+  'CS_RepeatNew_CAT_04_pct': 'CAT_04',   // ← đổi tên
+  'CS_RepeatNew_CAT_05_pct': 'CAT_05',   // ← đổi tên
+};
 // ──────────────────────────────────────────────
 
 // Score and return top N category overlayChart entries
@@ -2087,8 +2127,11 @@ function getTopNCatCharts(did, range, catCharts, n) {
   return scored.slice(0, n).map(function(s, rank) {
     var oc  = s.oc;
     var key = oc.datasets[0].key;
-    // Apply friendly name from QA_CAT_LABELS (extend map for other depts later)
-    var friendlyName = QA_CAT_LABELS[key] || oc.datasets[0].label || key;
+    // V53: pick correct label map based on dept
+    var _map = did==='TL' ? TL_CAT_LABELS
+             : did==='CS' ? CS_CAT_LABELS
+             : QA_CAT_LABELS;
+    var friendlyName = (_map&&_map[key]) || oc.datasets[0].label || key;
     // Clone to avoid mutating the original config
     var clone = JSON.parse(JSON.stringify(oc));
     clone.title        = '#' + (rank + 1) + ' ' + friendlyName + '  (Repeat/New %)';
@@ -2137,7 +2180,11 @@ function buildCatNControlHTML(dept, range) {
     var tot = last12.reduce(function(s,dk){
       return s+(getGSVal(dept.id,dk.y,dk.m,key)||0);
     },0);
-    return {label:(QA_CAT_LABELS&&QA_CAT_LABELS[key])||oc.datasets[0].label||key,
+    // V53: lookup friendly name from dept-specific label map
+    var _labelMap = dept.id==='TL' ? TL_CAT_LABELS
+                  : dept.id==='CS' ? CS_CAT_LABELS
+                  : QA_CAT_LABELS;  // default = QA
+    return {label:(_labelMap&&_labelMap[key])||oc.datasets[0].label||key,
             total:Math.round(tot*10)/10};
   });
   scored.sort(function(a,b){return b.total-a.total;});
