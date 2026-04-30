@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMI · KPI Dashboard V53</title>
+<title>CMI · KPI Dashboard V54</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -972,6 +972,7 @@ var accOpen = null;
 var CH = {};
 var UNLOCKED = {};
 var OAUTH_HANDLING = false; // true khi đang xử lý OAuth redirect
+var _lastCsv = '';  // V54: raw CSV snapshot — dùng để detect data thay đổi
 // BOD selected period (for snapshot delta view)
 var selBodY = NY;
 var selBodM = NM; // 0-indexed
@@ -1000,6 +1001,14 @@ function fetchSheetData(cb){
     .then(function(csv){
       var parsed = parseCSV(csv);
       if(parsed.length < 2){ setSyncBadge('err', 0); if(cb)cb(); return; }
+      // V54: compare raw CSV string — skip full re-render if data unchanged
+      var changed = (csv !== _lastCsv);
+      _lastCsv = csv;
+      if(!changed){
+        setSyncBadge('ok', GS_DATA.length);
+        if(cb) cb(false); // false = no change
+        return;
+      }
       GS_HDR  = parsed[0].map(function(h){ return h.trim(); });
       GS_DATA = parsed.slice(1).filter(function(r){ return r[0] && r[0].trim(); });
       setSyncBadge('ok', GS_DATA.length);
@@ -1197,7 +1206,7 @@ function doLogout(){
   if(MSG_POLL_TIMER){clearInterval(MSG_POLL_TIMER);MSG_POLL_TIMER=null;}
   if(KPI_REFRESH_TIMER){clearInterval(KPI_REFRESH_TIMER);KPI_REFRESH_TIMER=null;}
   // 4. Reset state
-  WL_CACHE=null;
+  WL_CACHE=null; _lastCsv=''; // V54: reset CSV snapshot on logout
   U=null; deptId=null; accOpen=null;
   Object.keys(CH).forEach(function(k){ try{CH[k].destroy();}catch(e){} });
   CH={}; GS_DATA=[]; GS_HDR=[]; NOTES_DATA=[]; UNLOCKED={};
@@ -2378,12 +2387,15 @@ function startMsgBackgroundPoll(){
   if(KPI_REFRESH_TIMER) clearInterval(KPI_REFRESH_TIMER);
   KPI_REFRESH_TIMER = setInterval(function(){
     if(!U) return;
-    fetchSheetData(function(){
-      // Only re-render if BOD is viewing a dept (not overview)
+    fetchSheetData(function(changed){
+      // V54: changed=false means raw CSV unchanged → skip re-render entirely
+      if(changed === false) return;
+      // Data changed → re-render only if BOD is viewing a dept
       if((U.role==='bod'||U.role==='admin') && accOpen){
         buildbodLeft(); renderbodRight(accOpen);
+      } else if(U.role==='dept'){
+        renderDeptRight();
       }
-      setSyncBadge('ok', GS_DATA.length);
     });
   }, 120000); // every 2 minutes
 }
@@ -3128,6 +3140,7 @@ document.addEventListener('DOMContentLoaded',function(){
   // sync badge click to refresh
   el('sync-badge').addEventListener('click',function(){
     if(!U)return;
+    _lastCsv=''; // V54: force refresh on manual click regardless of change
     fetchSheetData(function(){
       if(U.role==='bod'||U.role==='admin'){buildbodLeft();renderbodRight(accOpen);}
       else{buildDeptLeft();renderDeptRight();}
